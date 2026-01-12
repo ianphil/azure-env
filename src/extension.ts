@@ -1,15 +1,15 @@
 import * as vscode from 'vscode';
-
-// Azure auth packages
-import { VSCodeAzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
-
-// Azure SDK packages
-import { AppConfigurationClient } from '@azure/app-configuration';
 import { AppConfigurationManagementClient } from '@azure/arm-appconfiguration';
-import { SecretClient } from '@azure/keyvault-secrets';
-import { DefaultAzureCredential } from '@azure/identity';
+import { TokenCredential } from '@azure/identity';
 
-let subscriptionProvider: VSCodeAzureSubscriptionProvider | undefined;
+import { AuthService } from './services/authService';
+import { AppConfigService } from './services/appConfigService';
+import { KeyVaultService } from './services/keyVaultService';
+import { getSettings, saveSettings } from './models/settings';
+import { runConnectFlow, StoreInfo, KeyInfo } from './commands/connect';
+import { refreshEnvironment } from './commands/refresh';
+
+let authService: AuthService | undefined;
 let outputChannel: vscode.OutputChannel;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
@@ -23,9 +23,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   );
 
   // Auto-refresh if already configured
-  const config = vscode.workspace.getConfiguration('azureEnv.appConfiguration');
-  const endpoint = config.get<string>('endpoint');
-  if (endpoint) {
+  const settings = getSettings();
+  if (settings.endpoint && settings.selectedKeys.length > 0) {
+    // Delay to avoid blocking activation
     setTimeout(() => refreshCommand(context), 2000);
   }
 
@@ -34,180 +34,151 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
 async function connectCommand(context: vscode.ExtensionContext): Promise<void> {
   try {
-    // Create subscription provider (uses VS Code's built-in Microsoft auth)
-    subscriptionProvider = new VSCodeAzureSubscriptionProvider();
-    context.subscriptions.push(subscriptionProvider);
+    authService = new AuthService();
+    context.subscriptions.push(authService.getProvider());
 
-    // Check sign-in status and prompt if needed
-    const isSignedIn = await subscriptionProvider.isSignedIn();
-    if (!isSignedIn) {
-      const success = await subscriptionProvider.signIn();
-      if (!success) {
-        vscode.window.showErrorMessage('Azure sign-in required');
-        return;
-      }
-    }
-
-    // List subscriptions
-    const subscriptions = await subscriptionProvider.getSubscriptions(false);
-    if (subscriptions.length === 0) {
-      vscode.window.showWarningMessage('No Azure subscriptions found');
-      return;
-    }
-
-    // Show subscription picker
-    const subItems = subscriptions.map(sub => ({
-      label: sub.name,
-      description: sub.subscriptionId,
-      subscription: sub,
-    }));
-
-    const selectedSub = await vscode.window.showQuickPick(subItems, {
-      placeHolder: 'Select Azure subscription',
+    const result = await runConnectFlow({
+      authService,
+      showQuickPick: async (items, options) => {
+        return vscode.window.showQuickPick(items, options) as any;
+      },
+      saveSettings,
+      listStores: async (subscriptionId, credential) => {
+        return listAppConfigStores(subscriptionId, credential as TokenCredential);
+      },
+      listKeys: async (endpoint, credential) => {
+        return listConfigKeys(endpoint, credential as TokenCredential);
+      },
     });
 
-    if (!selectedSub) return;
-
-    // List App Configuration stores using ARM client
-    const armClient = new AppConfigurationManagementClient(
-      selectedSub.subscription.credential,
-      selectedSub.subscription.subscriptionId
-    );
-
-    const stores: Array<{ name: string; endpoint: string }> = [];
-    for await (const store of armClient.configurationStores.list()) {
-      if (store.name && store.endpoint) {
-        stores.push({ name: store.name, endpoint: store.endpoint });
-      }
+    if (result.success) {
+      vscode.window.showInformationMessage(`Connected to ${result.storeName}`);
+      await refreshCommand(context);
+    } else {
+      handleConnectFailure(result.reason);
     }
-
-    if (stores.length === 0) {
-      vscode.window.showWarningMessage('No App Configuration stores found');
-      return;
-    }
-
-    // Show store picker
-    const storeItems = stores.map(s => ({
-      label: s.name,
-      description: s.endpoint,
-      endpoint: s.endpoint,
-    }));
-
-    const selectedStore = await vscode.window.showQuickPick(storeItems, {
-      placeHolder: 'Select App Configuration store',
-    });
-
-    if (!selectedStore) return;
-
-    // List keys from the selected store
-    const appConfigClient = new AppConfigurationClient(
-      selectedStore.endpoint,
-      selectedSub.subscription.credential
-    );
-
-    const keys: string[] = [];
-    for await (const setting of appConfigClient.listConfigurationSettings()) {
-      if (setting.key) {
-        keys.push(setting.key);
-      }
-    }
-
-    if (keys.length === 0) {
-      vscode.window.showWarningMessage('No configuration keys found');
-      return;
-    }
-
-    // Show key multi-select picker
-    const keyItems = keys.map(k => ({ label: k, picked: false }));
-    const selectedKeys = await vscode.window.showQuickPick(keyItems, {
-      placeHolder: 'Select configuration keys',
-      canPickMany: true,
-    });
-
-    if (!selectedKeys || selectedKeys.length === 0) return;
-
-    // Save to workspace settings
-    const config = vscode.workspace.getConfiguration('azureEnv.appConfiguration');
-    await config.update('endpoint', selectedStore.endpoint, vscode.ConfigurationTarget.Workspace);
-    await config.update('selectedKeys', selectedKeys.map(k => k.label), vscode.ConfigurationTarget.Workspace);
-
-    vscode.window.showInformationMessage(`Connected to ${selectedStore.label}`);
-
-    // Trigger refresh to inject env vars
-    await refreshCommand(context);
   } catch (error) {
+    outputChannel.appendLine(`Connect error: ${error}`);
     vscode.window.showErrorMessage(`Connection failed: ${error}`);
+  }
+}
+
+function handleConnectFailure(reason: string): void {
+  switch (reason) {
+    case 'auth_failed':
+      vscode.window.showErrorMessage('Azure sign-in required');
+      break;
+    case 'no_subscriptions':
+      vscode.window.showWarningMessage('No Azure subscriptions found');
+      break;
+    case 'no_stores':
+      vscode.window.showWarningMessage('No App Configuration stores found');
+      break;
+    case 'no_keys':
+      vscode.window.showWarningMessage('No configuration keys found');
+      break;
+    case 'no_keys_selected':
+      vscode.window.showWarningMessage('No keys selected');
+      break;
+    case 'cancelled':
+      // User cancelled, no message needed
+      break;
+    default:
+      vscode.window.showErrorMessage(`Connection failed: ${reason}`);
   }
 }
 
 async function refreshCommand(context: vscode.ExtensionContext): Promise<void> {
   try {
-    const config = vscode.workspace.getConfiguration('azureEnv.appConfiguration');
-    const endpoint = config.get<string>('endpoint');
-    const selectedKeys = config.get<string[]>('selectedKeys') || [];
-    const label = config.get<string>('label') || undefined;
+    const settings = getSettings();
 
-    if (!endpoint || selectedKeys.length === 0) {
+    if (!settings.endpoint || settings.selectedKeys.length === 0) {
       vscode.window.showWarningMessage('No App Configuration configured. Run "Azure Env: Connect" first.');
       return;
     }
 
-    // Get credential - use DefaultAzureCredential which will pick up VS Code auth
-    const credential = new DefaultAzureCredential();
-    const appConfigClient = new AppConfigurationClient(endpoint, credential);
-
-    // Fetch and resolve values
-    const envCollection = context.environmentVariableCollection;
-    envCollection.clear();
-
-    let successCount = 0;
-    let errorCount = 0;
-
-    for (const key of selectedKeys) {
-      try {
-        const setting = await appConfigClient.getConfigurationSetting({ key, label });
-
-        let value = setting.value || '';
-
-        // Check for Key Vault reference
-        if (setting.contentType?.includes('keyvaultref')) {
-          const ref = JSON.parse(value) as { uri: string };
-          value = await resolveKeyVaultSecret(ref.uri, credential);
-        }
-
-        // Transform key to env var name: MyService/Database/Host -> MYSERVICE_DATABASE_HOST
-        const envName = key.replace(/\//g, '_').toUpperCase();
-        envCollection.replace(envName, value);
-        successCount++;
-      } catch (err) {
-        console.error(`Failed to fetch ${key}:`, err);
-        errorCount++;
-      }
+    // Ensure signed in
+    if (!authService) {
+      authService = new AuthService();
+      context.subscriptions.push(authService.getProvider());
     }
 
-    if (errorCount > 0) {
-      vscode.window.showWarningMessage(`Environment refreshed: ${successCount} succeeded, ${errorCount} failed`);
+    const isSignedIn = await authService.ensureSignedIn();
+    if (!isSignedIn) {
+      vscode.window.showErrorMessage('Azure sign-in required');
+      return;
+    }
+
+    // Get credential from subscription
+    const subscriptions = await authService.getSubscriptions();
+    if (subscriptions.length === 0) {
+      vscode.window.showErrorMessage('No Azure subscriptions available');
+      return;
+    }
+
+    // Use first subscription's credential (could be improved to remember selected subscription)
+    const credential = subscriptions[0].credential;
+
+    // Create services
+    const appConfigService = new AppConfigService(settings.endpoint, credential);
+    const keyVaultService = new KeyVaultService(credential);
+
+    // Refresh environment
+    const result = await refreshEnvironment({
+      selectedKeys: settings.selectedKeys,
+      label: settings.label,
+      envCollection: context.environmentVariableCollection,
+      appConfigService,
+      keyVaultService,
+    });
+
+    // Show result
+    if (result.failed > 0) {
+      const errorKeys = result.errors.map((e) => e.key).join(', ');
+      outputChannel.appendLine(`Failed to resolve: ${errorKeys}`);
+      result.errors.forEach((e) => outputChannel.appendLine(`  ${e.key}: ${e.error.message}`));
+      vscode.window.showWarningMessage(
+        `Environment refreshed: ${result.succeeded} succeeded, ${result.failed} failed`
+      );
     } else {
-      vscode.window.showInformationMessage(`Environment refreshed: ${successCount} variables injected`);
+      vscode.window.showInformationMessage(
+        `Environment refreshed: ${result.succeeded} variables injected`
+      );
     }
   } catch (error) {
+    outputChannel.appendLine(`Refresh error: ${error}`);
     vscode.window.showErrorMessage(`Refresh failed: ${error}`);
   }
 }
 
-async function resolveKeyVaultSecret(uri: string, credential: DefaultAzureCredential): Promise<string> {
-  // Parse vault URL and secret name from URI
-  // Format: https://myvault.vault.azure.net/secrets/MySecret
-  const url = new URL(uri);
-  const vaultUrl = `${url.protocol}//${url.host}`;
-  const secretName = url.pathname.split('/')[2];
+async function listAppConfigStores(
+  subscriptionId: string,
+  credential: TokenCredential
+): Promise<StoreInfo[]> {
+  const armClient = new AppConfigurationManagementClient(credential, subscriptionId);
+  const stores: StoreInfo[] = [];
 
-  const secretClient = new SecretClient(vaultUrl, credential);
-  const secret = await secretClient.getSecret(secretName);
+  for await (const store of armClient.configurationStores.list()) {
+    if (store.name && store.endpoint) {
+      stores.push({ name: store.name, endpoint: store.endpoint });
+    }
+  }
 
-  return secret.value || '';
+  return stores;
+}
+
+async function listConfigKeys(
+  endpoint: string,
+  credential: TokenCredential
+): Promise<KeyInfo[]> {
+  const appConfigService = new AppConfigService(endpoint, credential);
+  const settings = await appConfigService.listSettings({});
+
+  return settings
+    .filter((s) => s.key)
+    .map((s) => ({ key: s.key! }));
 }
 
 export function deactivate(): void {
-  subscriptionProvider?.dispose();
+  // Cleanup handled by disposables registered with context.subscriptions
 }
