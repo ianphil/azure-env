@@ -48,10 +48,12 @@ export function extractRetryAfter(error: unknown): number | undefined {
 
     if (typeof headers.get === 'function') {
       retryAfter = (headers.get as (key: string) => string | undefined)('retry-after');
-    } else if ('retry-after' in headers) {
-      retryAfter = headers['retry-after'] as string;
-    } else if ('Retry-After' in headers) {
-      retryAfter = headers['Retry-After'] as string;
+    } else {
+      // Plain object headers - case-insensitive lookup
+      const key = Object.keys(headers).find((k) => k.toLowerCase() === 'retry-after');
+      if (key) {
+        retryAfter = headers[key] as string;
+      }
     }
 
     if (retryAfter) {

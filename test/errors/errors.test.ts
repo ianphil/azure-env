@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import {
-  AzureEnvError,
   AppConfigError,
   AppConfigListError,
   KeyVaultError,
@@ -94,9 +93,13 @@ describe('KeyVaultReferenceError', () => {
   });
 
   it('provides user messages for each reason', () => {
-    expect(new KeyVaultReferenceError('', '', 'invalid_json').userMessage).toContain('not valid JSON');
+    expect(new KeyVaultReferenceError('', '', 'invalid_json').userMessage).toContain(
+      'not valid JSON'
+    );
     expect(new KeyVaultReferenceError('', '', 'missing_uri').userMessage).toContain('missing URI');
-    expect(new KeyVaultReferenceError('', '', 'invalid_uri').userMessage).toContain('Invalid Key Vault URI');
+    expect(new KeyVaultReferenceError('', '', 'invalid_uri').userMessage).toContain(
+      'Invalid Key Vault URI'
+    );
   });
 });
 
@@ -124,7 +127,9 @@ describe('AuthenticationError', () => {
 
   it('provides user messages for each reason', () => {
     expect(new AuthenticationError('', 'not_signed_in').userMessage).toContain('sign in');
-    expect(new AuthenticationError('', 'no_subscriptions').userMessage).toContain('No Azure subscriptions');
+    expect(new AuthenticationError('', 'no_subscriptions').userMessage).toContain(
+      'No Azure subscriptions'
+    );
     expect(new AuthenticationError('', 'cancelled').userMessage).toContain('cancelled');
   });
 });

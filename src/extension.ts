@@ -174,7 +174,6 @@ async function refreshCommand(context: vscode.ExtensionContext): Promise<void> {
     return;
   }
 
-  const previousState = statusBar?.getState();
   statusBar?.setState('refreshing');
 
   try {

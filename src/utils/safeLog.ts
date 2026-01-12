@@ -11,7 +11,7 @@ const SECRET_PATTERNS = [
   /credential/i,
   /connectionstring/i,
   /apikey/i,
-  /auth/i,
+  /^auth$/i,
   /bearer/i,
   /private/i,
 ];

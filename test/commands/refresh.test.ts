@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { refreshEnvironment, RefreshOptions, RefreshResult } from '../../src/commands/refresh';
+import { refreshEnvironment, RefreshOptions } from '../../src/commands/refresh';
 
 describe('refreshEnvironment', () => {
   let mockEnvCollection: {
