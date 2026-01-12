@@ -1,6 +1,23 @@
 import { DefaultAzureCredential, TokenCredential } from '@azure/identity';
 
 /**
+ * Test data keys seeded by scripts/setup-azure-resources.sh
+ * These must match the values in the setup script.
+ */
+export const SEEDED_TEST_DATA = {
+  /** Plain config value key */
+  configKey: 'integration-test/plain-value',
+  /** Plain config value */
+  configValue: 'test-config-value',
+  /** Key Vault reference key in App Configuration */
+  keyVaultRefKey: 'integration-test/secret-ref',
+  /** Secret name in Key Vault */
+  secretName: 'integration-test-secret',
+  /** Label used for all test data */
+  label: 'integration-test',
+} as const;
+
+/**
  * Configuration for integration tests.
  * Requires environment variables to be set.
  */

@@ -5,6 +5,7 @@ import {
   getIntegrationConfig,
   getCredential,
   IntegrationTestConfig,
+  SEEDED_TEST_DATA,
 } from './setup';
 
 // Only run if both App Config and Key Vault are configured
@@ -22,14 +23,12 @@ describe.skipIf(!shouldRun())('KeyVaultService Integration', () => {
   });
 
   describe('resolveSecret', () => {
-    // Note: This test requires a secret to exist in your Key Vault
-    // If you don't have test secrets, update with a real secret URI
-
-    it.skip('resolves a secret from Key Vault', async () => {
-      // Update this with a real secret URI from your Key Vault
-      const secretUri = `${config.keyVaultUrl}/secrets/your-test-secret`;
+    it('resolves a seeded secret from Key Vault', async () => {
+      const secretUri = `${config.keyVaultUrl}/secrets/${SEEDED_TEST_DATA.secretName}`;
       const value = await service.resolveSecret(secretUri);
       expect(typeof value).toBe('string');
+      // The secret value starts with 'test-secret-value-' followed by a timestamp
+      expect(value).toMatch(/^test-secret-value-\d+$/);
     });
 
     it('throws KeyVaultError for non-existent secret', async () => {
@@ -41,17 +40,44 @@ describe.skipIf(!shouldRun())('KeyVaultService Integration', () => {
       const invalidUri = 'https://example.com/not-a-keyvault';
       await expect(service.resolveSecret(invalidUri)).rejects.toThrow();
     });
+
+    it('throws for malformed URI', async () => {
+      const malformedUri = 'not-a-valid-uri';
+      await expect(service.resolveSecret(malformedUri)).rejects.toThrow();
+    });
   });
 
   describe('resolveSecrets (batch)', () => {
-    it('handles batch requests with Promise.allSettled', async () => {
+    it('resolves multiple secrets including seeded data', async () => {
+      const uris = [
+        `${config.keyVaultUrl}/secrets/${SEEDED_TEST_DATA.secretName}`,
+      ];
+      const results = await service.resolveSecrets(uris);
+      expect(results).toHaveLength(1);
+      expect(results[0].status).toBe('fulfilled');
+      if (results[0].status === 'fulfilled') {
+        expect(results[0].value).toMatch(/^test-secret-value-\d+$/);
+      }
+    });
+
+    it('handles mixed success and failure', async () => {
+      const uris = [
+        `${config.keyVaultUrl}/secrets/${SEEDED_TEST_DATA.secretName}`,
+        `${config.keyVaultUrl}/secrets/nonexistent-${Date.now()}`,
+      ];
+      const results = await service.resolveSecrets(uris);
+      expect(results).toHaveLength(2);
+      expect(results[0].status).toBe('fulfilled');
+      expect(results[1].status).toBe('rejected');
+    });
+
+    it('handles all non-existent secrets', async () => {
       const uris = [
         `${config.keyVaultUrl}/secrets/nonexistent-1-${Date.now()}`,
         `${config.keyVaultUrl}/secrets/nonexistent-2-${Date.now()}`,
       ];
       const results = await service.resolveSecrets(uris);
       expect(results).toHaveLength(2);
-      // All should be rejected since secrets don't exist
       results.forEach((result) => {
         expect(result.status).toBe('rejected');
       });
@@ -60,19 +86,28 @@ describe.skipIf(!shouldRun())('KeyVaultService Integration', () => {
 
   describe('client caching', () => {
     it('reuses client for same vault URL', async () => {
-      // This tests the internal caching behavior
-      // Both calls should use the same SecretClient instance
-      const uri1 = `${config.keyVaultUrl}/secrets/test-1`;
-      const uri2 = `${config.keyVaultUrl}/secrets/test-2`;
+      const secretUri = `${config.keyVaultUrl}/secrets/${SEEDED_TEST_DATA.secretName}`;
 
-      // Both will fail (404) but the important thing is they don't create new clients
-      await Promise.allSettled([
-        service.resolveSecret(uri1).catch(() => {}),
-        service.resolveSecret(uri2).catch(() => {}),
+      // Call twice - should reuse the same SecretClient instance
+      const value1 = await service.resolveSecret(secretUri);
+      const value2 = await service.resolveSecret(secretUri);
+
+      expect(value1).toBe(value2);
+    });
+
+    it('handles concurrent requests to same vault', async () => {
+      const secretUri = `${config.keyVaultUrl}/secrets/${SEEDED_TEST_DATA.secretName}`;
+
+      // Make multiple concurrent requests
+      const results = await Promise.all([
+        service.resolveSecret(secretUri),
+        service.resolveSecret(secretUri),
+        service.resolveSecret(secretUri),
       ]);
 
-      // If we got here without crashing, caching is working
-      expect(true).toBe(true);
+      // All should return the same value
+      expect(results[0]).toBe(results[1]);
+      expect(results[1]).toBe(results[2]);
     });
   });
 });

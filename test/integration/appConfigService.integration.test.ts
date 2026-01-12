@@ -5,6 +5,7 @@ import {
   getIntegrationConfig,
   getCredential,
   IntegrationTestConfig,
+  SEEDED_TEST_DATA,
 } from './setup';
 
 describe.skipIf(!shouldRunIntegrationTests())('AppConfigService Integration', () => {
@@ -20,33 +21,50 @@ describe.skipIf(!shouldRunIntegrationTests())('AppConfigService Integration', ()
     it('lists settings from real App Configuration', async () => {
       const settings = await service.listSettings({ keyFilter: '*' });
       expect(Array.isArray(settings)).toBe(true);
-      // Should return at least an empty array
     });
 
     it('filters settings by key pattern', async () => {
-      const settings = await service.listSettings({ keyFilter: 'nonexistent-prefix-*' });
+      const settings = await service.listSettings({ keyFilter: 'integration-test/*' });
       expect(Array.isArray(settings)).toBe(true);
-      // May return empty if no keys match
+      // Should find the seeded test data
+      expect(settings.length).toBeGreaterThan(0);
     });
 
     it('handles label filter', async () => {
       const settings = await service.listSettings({
         keyFilter: '*',
-        labelFilter: 'integration-test',
+        labelFilter: SEEDED_TEST_DATA.label,
       });
       expect(Array.isArray(settings)).toBe(true);
+      // Should find seeded data with integration-test label
+      expect(settings.length).toBeGreaterThan(0);
+    });
+
+    it('returns empty for non-existent key pattern', async () => {
+      const settings = await service.listSettings({ keyFilter: 'nonexistent-prefix-*' });
+      expect(Array.isArray(settings)).toBe(true);
+      expect(settings.length).toBe(0);
     });
   });
 
   describe('getSetting', () => {
-    // Note: This test requires a key to exist in your App Configuration
-    // If you don't have test keys, this will throw AppConfigError with 404
+    it('retrieves a seeded plain config value', async () => {
+      const setting = await service.getSetting(
+        SEEDED_TEST_DATA.configKey,
+        SEEDED_TEST_DATA.label
+      );
+      expect(setting.key).toBe(SEEDED_TEST_DATA.configKey);
+      expect(setting.value).toBe(SEEDED_TEST_DATA.configValue);
+    });
 
-    it.skip('retrieves a specific setting by key', async () => {
-      // Update this with a real key from your App Configuration
-      const testKey = 'your-test-key';
-      const setting = await service.getSetting(testKey, '');
-      expect(setting.key).toBe(testKey);
+    it('retrieves a seeded Key Vault reference', async () => {
+      const setting = await service.getSetting(
+        SEEDED_TEST_DATA.keyVaultRefKey,
+        SEEDED_TEST_DATA.label
+      );
+      expect(setting.key).toBe(SEEDED_TEST_DATA.keyVaultRefKey);
+      // Key Vault references have a specific content type
+      expect(setting.contentType).toContain('keyvaultref');
     });
 
     it('throws AppConfigError for non-existent key', async () => {
@@ -56,14 +74,34 @@ describe.skipIf(!shouldRunIntegrationTests())('AppConfigService Integration', ()
   });
 
   describe('getSettings (batch)', () => {
-    it('handles batch requests with Promise.allSettled', async () => {
+    it('retrieves multiple seeded settings', async () => {
+      const keys = [SEEDED_TEST_DATA.configKey, SEEDED_TEST_DATA.keyVaultRefKey];
+      const results = await service.getSettings(keys, SEEDED_TEST_DATA.label);
+      expect(results).toHaveLength(2);
+      // Both should succeed since they're seeded
+      results.forEach((result) => {
+        expect(result.status).toBe('fulfilled');
+      });
+    });
+
+    it('handles mixed success and failure', async () => {
       const keys = [
-        `${config.testKeyPrefix}/key1`,
-        `${config.testKeyPrefix}/key2`,
+        SEEDED_TEST_DATA.configKey,
+        `${config.testKeyPrefix}/nonexistent`,
+      ];
+      const results = await service.getSettings(keys, SEEDED_TEST_DATA.label);
+      expect(results).toHaveLength(2);
+      expect(results[0].status).toBe('fulfilled');
+      expect(results[1].status).toBe('rejected');
+    });
+
+    it('handles all non-existent keys', async () => {
+      const keys = [
+        `${config.testKeyPrefix}/nonexistent-1`,
+        `${config.testKeyPrefix}/nonexistent-2`,
       ];
       const results = await service.getSettings(keys, '');
       expect(results).toHaveLength(2);
-      // All should be rejected since keys don't exist
       results.forEach((result) => {
         expect(result.status).toBe('rejected');
       });
