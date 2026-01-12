@@ -2,7 +2,7 @@
   "name": "azure-env",
   "displayName": "Azure Env",
   "description": "Inject Azure App Configuration values into terminal environment",
-  "version": "0.0.1",
+  "version": "0.2.0",
   "publisher": "azure-env",
   "engines": {
     "vscode": "^1.108.0"
