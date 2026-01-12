@@ -6,7 +6,8 @@ describe('runConnectFlow', () => {
     ensureSignedIn: ReturnType<typeof vi.fn>;
     getSubscriptions: ReturnType<typeof vi.fn>;
   };
-  let mockShowQuickPick: ReturnType<typeof vi.fn>;
+  let mockShowQuickPickSingle: ReturnType<typeof vi.fn>;
+  let mockShowQuickPickMulti: ReturnType<typeof vi.fn>;
   let mockSaveSettings: ReturnType<typeof vi.fn>;
   let mockListStores: ReturnType<typeof vi.fn>;
   let mockListKeys: ReturnType<typeof vi.fn>;
@@ -16,7 +17,8 @@ describe('runConnectFlow', () => {
       ensureSignedIn: vi.fn(),
       getSubscriptions: vi.fn(),
     };
-    mockShowQuickPick = vi.fn();
+    mockShowQuickPickSingle = vi.fn();
+    mockShowQuickPickMulti = vi.fn();
     mockSaveSettings = vi.fn();
     mockListStores = vi.fn();
     mockListKeys = vi.fn();
@@ -25,7 +27,8 @@ describe('runConnectFlow', () => {
   function createDeps(overrides: Partial<ConnectFlowDeps> = {}): ConnectFlowDeps {
     return {
       authService: mockAuthService as any,
-      showQuickPick: mockShowQuickPick,
+      showQuickPickSingle: mockShowQuickPickSingle,
+      showQuickPickMulti: mockShowQuickPickMulti,
       saveSettings: mockSaveSettings,
       listStores: mockListStores,
       listKeys: mockListKeys,
@@ -38,10 +41,10 @@ describe('runConnectFlow', () => {
     mockAuthService.getSubscriptions.mockResolvedValue([
       { name: 'Sub1', subscriptionId: 'sub-1', credential: {} },
     ]);
-    mockShowQuickPick
+    mockShowQuickPickSingle
       .mockResolvedValueOnce({ subscription: { subscriptionId: 'sub-1', credential: {} } }) // subscription
-      .mockResolvedValueOnce({ endpoint: 'https://test.azconfig.io' }) // store
-      .mockResolvedValueOnce([{ key: 'App/Key1' }, { key: 'App/Key2' }]); // keys
+      .mockResolvedValueOnce({ endpoint: 'https://test.azconfig.io' }); // store
+    mockShowQuickPickMulti.mockResolvedValueOnce([{ key: 'App/Key1' }, { key: 'App/Key2' }]); // keys
     mockListStores.mockResolvedValue([{ name: 'store', endpoint: 'https://test.azconfig.io' }]);
     mockListKeys.mockResolvedValue([{ key: 'App/Key1' }, { key: 'App/Key2' }]);
 
@@ -57,7 +60,7 @@ describe('runConnectFlow', () => {
   it('aborts if user cancels subscription picker', async () => {
     mockAuthService.ensureSignedIn.mockResolvedValue(true);
     mockAuthService.getSubscriptions.mockResolvedValue([{ name: 'Sub1' }]);
-    mockShowQuickPick.mockResolvedValue(undefined);
+    mockShowQuickPickSingle.mockResolvedValue(undefined);
 
     const result = await runConnectFlow(createDeps());
 
@@ -91,7 +94,7 @@ describe('runConnectFlow', () => {
     mockAuthService.getSubscriptions.mockResolvedValue([
       { name: 'Sub1', subscriptionId: 'sub-1', credential: {} },
     ]);
-    mockShowQuickPick
+    mockShowQuickPickSingle
       .mockResolvedValueOnce({ subscription: { subscriptionId: 'sub-1', credential: {} } })
       .mockResolvedValueOnce(undefined); // cancelled store picker
     mockListStores.mockResolvedValue([{ name: 'store', endpoint: 'https://test.azconfig.io' }]);
@@ -107,7 +110,7 @@ describe('runConnectFlow', () => {
     mockAuthService.getSubscriptions.mockResolvedValue([
       { name: 'Sub1', subscriptionId: 'sub-1', credential: {} },
     ]);
-    mockShowQuickPick.mockResolvedValueOnce({ subscription: { subscriptionId: 'sub-1', credential: {} } });
+    mockShowQuickPickSingle.mockResolvedValueOnce({ subscription: { subscriptionId: 'sub-1', credential: {} } });
     mockListStores.mockResolvedValue([]);
 
     const result = await runConnectFlow(createDeps());
@@ -121,10 +124,10 @@ describe('runConnectFlow', () => {
     mockAuthService.getSubscriptions.mockResolvedValue([
       { name: 'Sub1', subscriptionId: 'sub-1', credential: {} },
     ]);
-    mockShowQuickPick
+    mockShowQuickPickSingle
       .mockResolvedValueOnce({ subscription: { subscriptionId: 'sub-1', credential: {} } })
-      .mockResolvedValueOnce({ endpoint: 'https://test.azconfig.io' })
-      .mockResolvedValueOnce(undefined); // cancelled key picker
+      .mockResolvedValueOnce({ endpoint: 'https://test.azconfig.io' });
+    mockShowQuickPickMulti.mockResolvedValueOnce(undefined); // cancelled key picker
     mockListStores.mockResolvedValue([{ name: 'store', endpoint: 'https://test.azconfig.io' }]);
     mockListKeys.mockResolvedValue([{ key: 'App/Key1' }]);
 
@@ -139,10 +142,10 @@ describe('runConnectFlow', () => {
     mockAuthService.getSubscriptions.mockResolvedValue([
       { name: 'Sub1', subscriptionId: 'sub-1', credential: {} },
     ]);
-    mockShowQuickPick
+    mockShowQuickPickSingle
       .mockResolvedValueOnce({ subscription: { subscriptionId: 'sub-1', credential: {} } })
-      .mockResolvedValueOnce({ endpoint: 'https://test.azconfig.io' })
-      .mockResolvedValueOnce([]); // empty selection
+      .mockResolvedValueOnce({ endpoint: 'https://test.azconfig.io' });
+    mockShowQuickPickMulti.mockResolvedValueOnce([]); // empty selection
     mockListStores.mockResolvedValue([{ name: 'store', endpoint: 'https://test.azconfig.io' }]);
     mockListKeys.mockResolvedValue([{ key: 'App/Key1' }]);
 
@@ -157,10 +160,10 @@ describe('runConnectFlow', () => {
     mockAuthService.getSubscriptions.mockResolvedValue([
       { name: 'Sub1', subscriptionId: 'sub-1', credential: {} },
     ]);
-    mockShowQuickPick
+    mockShowQuickPickSingle
       .mockResolvedValueOnce({ subscription: { subscriptionId: 'sub-1', credential: {} } })
-      .mockResolvedValueOnce({ endpoint: 'https://mystore.azconfig.io', name: 'mystore' })
-      .mockResolvedValueOnce([{ key: 'App/Key1' }]);
+      .mockResolvedValueOnce({ endpoint: 'https://mystore.azconfig.io', name: 'mystore' });
+    mockShowQuickPickMulti.mockResolvedValueOnce([{ key: 'App/Key1' }]);
     mockListStores.mockResolvedValue([{ name: 'mystore', endpoint: 'https://mystore.azconfig.io' }]);
     mockListKeys.mockResolvedValue([{ key: 'App/Key1' }]);
 

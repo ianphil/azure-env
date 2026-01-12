@@ -17,7 +17,13 @@ export class KeyVaultService {
   private getClient(vaultUrl: string): SecretClient {
     let client = this.clients.get(vaultUrl);
     if (!client) {
-      client = new SecretClient(vaultUrl, this.credential);
+      client = new SecretClient(vaultUrl, this.credential, {
+        retryOptions: {
+          maxRetries: 3,
+          retryDelayInMs: 1000,
+          maxRetryDelayInMs: 10000,
+        },
+      });
       this.clients.set(vaultUrl, client);
     }
     return client;

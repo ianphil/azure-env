@@ -85,4 +85,23 @@ describe('parseKeyVaultSecretUri', () => {
   it('throws on non-secret URI', () => {
     expect(() => parseKeyVaultSecretUri('https://myvault.vault.azure.net/keys/MyKey')).toThrow('Invalid Key Vault secret URI');
   });
+
+  it('throws on HTTP URI (requires HTTPS)', () => {
+    expect(() => parseKeyVaultSecretUri('http://myvault.vault.azure.net/secrets/MySecret')).toThrow('must use HTTPS');
+  });
+
+  it('throws on non-Azure domain', () => {
+    expect(() => parseKeyVaultSecretUri('https://malicious-site.com/secrets/MySecret')).toThrow('must be *.vault.azure.net');
+  });
+
+  it('throws on partial domain match', () => {
+    expect(() => parseKeyVaultSecretUri('https://fakevault.azure.net/secrets/MySecret')).toThrow('must be *.vault.azure.net');
+  });
+
+  it('accepts valid Azure Key Vault domains', () => {
+    const uri = 'https://my-company-vault.vault.azure.net/secrets/DatabasePassword';
+    const result = parseKeyVaultSecretUri(uri);
+    expect(result.vaultUrl).toBe('https://my-company-vault.vault.azure.net');
+    expect(result.secretName).toBe('DatabasePassword');
+  });
 });

@@ -13,10 +13,14 @@ export interface KeyInfo {
 
 export interface ConnectFlowDeps {
   authService: AuthService;
-  showQuickPick: <T extends QuickPickItem>(
+  showQuickPickSingle: <T extends QuickPickItem>(
     items: T[],
-    options?: { placeHolder?: string; canPickMany?: boolean }
-  ) => Promise<T | T[] | undefined>;
+    options?: { placeHolder?: string }
+  ) => Promise<T | undefined>;
+  showQuickPickMulti: <T extends QuickPickItem>(
+    items: T[],
+    options?: { placeHolder?: string }
+  ) => Promise<T[] | undefined>;
   saveSettings: (settings: Partial<AzureEnvSettings>) => Promise<void>;
   listStores: (subscriptionId: string, credential: unknown) => Promise<StoreInfo[]>;
   listKeys: (endpoint: string, credential: unknown) => Promise<KeyInfo[]>;
@@ -31,7 +35,7 @@ export type ConnectResult =
  * Returns success with endpoint or failure with reason.
  */
 export async function runConnectFlow(deps: ConnectFlowDeps): Promise<ConnectResult> {
-  const { authService, showQuickPick, saveSettings, listStores, listKeys } = deps;
+  const { authService, showQuickPickSingle, showQuickPickMulti, saveSettings, listStores, listKeys } = deps;
 
   // Step 1: Ensure signed in
   const isSignedIn = await authService.ensureSignedIn();
@@ -51,11 +55,11 @@ export async function runConnectFlow(deps: ConnectFlowDeps): Promise<ConnectResu
     subscription: sub,
   }));
 
-  const selectedSub = await showQuickPick(subItems, {
+  const selectedSub = await showQuickPickSingle(subItems, {
     placeHolder: 'Select Azure subscription',
   });
 
-  if (!selectedSub || Array.isArray(selectedSub)) {
+  if (!selectedSub) {
     return { success: false, reason: 'cancelled' };
   }
 
@@ -76,11 +80,11 @@ export async function runConnectFlow(deps: ConnectFlowDeps): Promise<ConnectResu
     name: s.name,
   }));
 
-  const selectedStore = await showQuickPick(storeItems, {
+  const selectedStore = await showQuickPickSingle(storeItems, {
     placeHolder: 'Select App Configuration store',
   });
 
-  if (!selectedStore || Array.isArray(selectedStore)) {
+  if (!selectedStore) {
     return { success: false, reason: 'cancelled' };
   }
 
@@ -96,15 +100,15 @@ export async function runConnectFlow(deps: ConnectFlowDeps): Promise<ConnectResu
     key: k.key,
   }));
 
-  const selectedKeys = await showQuickPick(keyItems, {
+  const selectedKeys = await showQuickPickMulti(keyItems, {
     placeHolder: 'Select configuration keys',
-    canPickMany: true,
   });
 
-  if (!selectedKeys || !Array.isArray(selectedKeys) || selectedKeys.length === 0) {
-    if (selectedKeys === undefined) {
-      return { success: false, reason: 'cancelled' };
-    }
+  if (!selectedKeys) {
+    return { success: false, reason: 'cancelled' };
+  }
+
+  if (selectedKeys.length === 0) {
     return { success: false, reason: 'no_keys_selected' };
   }
 

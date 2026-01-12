@@ -50,6 +50,17 @@ export interface KeyVaultSecretInfo {
  */
 export function parseKeyVaultSecretUri(uri: string): KeyVaultSecretInfo {
   const url = new URL(uri);
+
+  // Security: Validate HTTPS protocol
+  if (url.protocol !== 'https:') {
+    throw new Error('Invalid Key Vault URI: must use HTTPS');
+  }
+
+  // Security: Validate Azure Key Vault domain
+  if (!url.hostname.endsWith('.vault.azure.net')) {
+    throw new Error('Invalid Key Vault URI: must be *.vault.azure.net');
+  }
+
   const parts = url.pathname.split('/');
   // pathname: /secrets/SecretName or /secrets/SecretName/version
   if (parts[1] !== 'secrets' || !parts[2]) {

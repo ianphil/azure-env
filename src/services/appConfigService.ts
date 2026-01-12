@@ -21,7 +21,13 @@ export class AppConfigService {
   private client: AppConfigurationClient;
 
   constructor(endpoint: string, credential: TokenCredential) {
-    this.client = new AppConfigurationClient(endpoint, credential);
+    this.client = new AppConfigurationClient(endpoint, credential, {
+      retryOptions: {
+        maxRetries: 3,
+        retryDelayInMs: 1000,
+        maxRetryDelayInMs: 10000,
+      },
+    });
   }
 
   /**

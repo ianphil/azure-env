@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import type { QuickPickItem, QuickPickOptions } from 'vscode';
 import { AppConfigurationManagementClient } from '@azure/arm-appconfiguration';
 import { TokenCredential } from '@azure/identity';
 
@@ -9,12 +10,36 @@ import { getSettings, saveSettings } from './models/settings';
 import { runConnectFlow, StoreInfo, KeyInfo } from './commands/connect';
 import { refreshEnvironment } from './commands/refresh';
 
+/**
+ * Type-safe wrapper for single-select quick pick.
+ */
+async function showQuickPickSingle<T extends QuickPickItem>(
+  items: T[],
+  options?: QuickPickOptions
+): Promise<T | undefined> {
+  return vscode.window.showQuickPick(items, options);
+}
+
+/**
+ * Type-safe wrapper for multi-select quick pick.
+ */
+async function showQuickPickMulti<T extends QuickPickItem>(
+  items: T[],
+  options?: QuickPickOptions
+): Promise<T[] | undefined> {
+  return vscode.window.showQuickPick(items, { ...options, canPickMany: true });
+}
+
 let authService: AuthService | undefined;
 let outputChannel: vscode.OutputChannel;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   outputChannel = vscode.window.createOutputChannel('Azure Env');
   context.subscriptions.push(outputChannel);
+
+  // Initialize AuthService once to avoid race conditions
+  authService = new AuthService();
+  context.subscriptions.push(authService.getProvider());
 
   // Register commands
   context.subscriptions.push(
@@ -33,15 +58,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 }
 
 async function connectCommand(context: vscode.ExtensionContext): Promise<void> {
-  try {
-    authService = new AuthService();
-    context.subscriptions.push(authService.getProvider());
+  // Security: Require workspace trust
+  if (!vscode.workspace.isTrusted) {
+    vscode.window.showErrorMessage(
+      'Azure Env requires workspace trust to connect to Azure resources'
+    );
+    return;
+  }
 
+  try {
     const result = await runConnectFlow({
-      authService,
-      showQuickPick: async (items, options) => {
-        return vscode.window.showQuickPick(items, options) as any;
-      },
+      authService: authService!,
+      showQuickPickSingle,
+      showQuickPickMulti,
       saveSettings,
       listStores: async (subscriptionId, credential) => {
         return listAppConfigStores(subscriptionId, credential as TokenCredential);
@@ -89,6 +118,14 @@ function handleConnectFailure(reason: string): void {
 }
 
 async function refreshCommand(context: vscode.ExtensionContext): Promise<void> {
+  // Security: Require workspace trust
+  if (!vscode.workspace.isTrusted) {
+    vscode.window.showErrorMessage(
+      'Azure Env requires workspace trust to connect to Azure resources'
+    );
+    return;
+  }
+
   try {
     const settings = getSettings();
 
@@ -97,20 +134,15 @@ async function refreshCommand(context: vscode.ExtensionContext): Promise<void> {
       return;
     }
 
-    // Ensure signed in
-    if (!authService) {
-      authService = new AuthService();
-      context.subscriptions.push(authService.getProvider());
-    }
-
-    const isSignedIn = await authService.ensureSignedIn();
+    // Ensure signed in (authService initialized in activate)
+    const isSignedIn = await authService!.ensureSignedIn();
     if (!isSignedIn) {
       vscode.window.showErrorMessage('Azure sign-in required');
       return;
     }
 
     // Get credential from subscription
-    const subscriptions = await authService.getSubscriptions();
+    const subscriptions = await authService!.getSubscriptions();
     if (subscriptions.length === 0) {
       vscode.window.showErrorMessage('No Azure subscriptions available');
       return;
