@@ -1,0 +1,72 @@
+{
+  "name": "azure-env",
+  "displayName": "Azure Env",
+  "description": "Inject Azure App Configuration values into terminal environment",
+  "version": "0.0.1",
+  "publisher": "azure-env",
+  "engines": {
+    "vscode": "^1.108.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "azureEnv.connect",
+        "title": "Azure Env: Connect to App Configuration"
+      },
+      {
+        "command": "azureEnv.refresh",
+        "title": "Azure Env: Refresh Environment"
+      }
+    ],
+    "configuration": {
+      "title": "Azure Env",
+      "properties": {
+        "azureEnv.appConfiguration.endpoint": {
+          "type": "string",
+          "default": "",
+          "description": "App Configuration endpoint URL"
+        },
+        "azureEnv.appConfiguration.keyFilter": {
+          "type": "string",
+          "default": "*",
+          "description": "Key filter pattern"
+        },
+        "azureEnv.appConfiguration.label": {
+          "type": "string",
+          "default": "",
+          "description": "Label filter"
+        },
+        "azureEnv.appConfiguration.selectedKeys": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Selected configuration keys"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "test": "vitest run",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@microsoft/vscode-azext-azureauth": "^5.1.1",
+    "@microsoft/vscode-azext-utils": "^4.0.3",
+    "@azure/identity": "^4.13.0",
+    "@azure/app-configuration": "^1.10.0",
+    "@azure/arm-appconfiguration": "^5.0.0",
+    "@azure/keyvault-secrets": "^4.10.0"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.108.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.9.0",
+    "esbuild": "^0.27.0",
+    "vitest": "^4.0.0"
+  }
+}

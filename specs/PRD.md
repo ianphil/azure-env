@@ -88,17 +88,19 @@ Leverage Azure's managed services (App Configuration + Key Vault) with Azure RBA
 ## Functional Requirements
 
 ### Azure Tools Extension Pack Integration
-- MUST declare `ms-vscode.azure-account` as an extension dependency
 - SHOULD be designed to work alongside other Azure Tools extensions
 - SHOULD contribute views to the existing Azure view container where appropriate
-- MUST leverage the shared Azure authentication session from Azure Account
+- MUST leverage VS Code's built-in Microsoft authentication provider
 - SHOULD follow UX patterns established by other Azure extensions (tree views, quick picks, etc.)
 
 ### Authentication
-- MUST integrate with VS Code Azure Account extension for authentication
-- MUST use `@azure/identity` with credential chaining that includes VS Code credentials
+> **Note:** The `ms-vscode.azure-account` extension was deprecated in January 2025. This extension uses VS Code's built-in Microsoft authentication provider via `@microsoft/vscode-azext-azureauth`.
+
+- MUST integrate with VS Code's built-in Microsoft authentication provider
+- MUST use `@microsoft/vscode-azext-azureauth` for Azure subscription and credential management
+- MUST use `@azure/identity` for Azure SDK client authentication
 - MUST NOT store any credentials or tokens directly
-- SHOULD prompt user to sign in via Azure Account if not already authenticated
+- SHOULD prompt user to sign in via VS Code's native Microsoft sign-in if not already authenticated
 
 ### App Configuration Integration
 - MUST list available App Configuration stores in a subscription
@@ -163,7 +165,7 @@ azure-env/
 ├── src/
 │   ├── extension.ts                 # Extension activation and deactivation
 │   ├── services/
-│   │   ├── credentialService.ts     # Azure authentication wrapper
+│   │   ├── authService.ts           # VS Code Microsoft auth integration
 │   │   ├── appConfigService.ts      # App Configuration operations
 │   │   └── keyVaultService.ts       # Key Vault operations
 │   ├── providers/
@@ -184,17 +186,17 @@ azure-env/
 ```json
 {
   "dependencies": {
-    "@azure/app-configuration": "^1.5.0",
-    "@azure/keyvault-secrets": "^4.8.0",
-    "@azure/identity": "^4.0.0",
-    "@azure/arm-appconfiguration": "^4.0.0",
-    "@azure/arm-keyvault": "^3.0.0"
-  },
-  "extensionDependencies": [
-    "ms-vscode.azure-account"
-  ]
+    "@microsoft/vscode-azext-azureauth": "^5.1.1",
+    "@microsoft/vscode-azext-utils": "^4.0.3",
+    "@azure/identity": "^4.13.0",
+    "@azure/app-configuration": "^1.10.0",
+    "@azure/arm-appconfiguration": "^5.0.0",
+    "@azure/keyvault-secrets": "^4.10.0"
+  }
 }
 ```
+
+> **Note:** No `extensionDependencies` required - authentication is handled via VS Code's built-in Microsoft authentication provider.
 
 ### Relationship to Azure Tools Extension Pack
 
@@ -202,14 +204,14 @@ The Azure Tools extension pack (`ms-vscode.vscode-node-azure-pack`) includes:
 
 | Extension | Relevance to Azure Env |
 |-----------|------------------------|
-| Azure Account | **Required dependency** - provides authentication |
+| Azure Account | ~~Deprecated January 2025~~ - not used |
 | Azure Resources | Reference for tree view patterns and UX conventions |
 | Azure App Service | Code reference for Azure service integration patterns |
 | Azure Functions | Code reference for Azure service integration patterns |
 | Azure Storage | Not directly used |
 | Azure Databases | Not directly used |
 
-This extension does NOT require the full Azure Tools pack, only the Azure Account extension. However, it is designed to feel native alongside the other Azure extensions for developers who have the pack installed.
+This extension does NOT require the Azure Tools pack or any extension dependencies. Authentication is handled via VS Code's built-in Microsoft authentication provider. However, the extension is designed to feel native alongside other Azure extensions for developers who have the pack installed.
 
 ### Workspace Settings Schema
 
