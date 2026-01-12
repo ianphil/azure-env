@@ -2,10 +2,6 @@ import * as vscode from 'vscode';
 
 // Azure auth packages
 import { VSCodeAzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
-import {
-  registerUIExtensionVariables,
-  createAzExtOutputChannel,
-} from '@microsoft/vscode-azext-utils';
 
 // Azure SDK packages
 import { AppConfigurationClient } from '@azure/app-configuration';
@@ -14,11 +10,11 @@ import { SecretClient } from '@azure/keyvault-secrets';
 import { DefaultAzureCredential } from '@azure/identity';
 
 let subscriptionProvider: VSCodeAzureSubscriptionProvider | undefined;
+let outputChannel: vscode.OutputChannel;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-  // Register extension variables for vscode-azext-utils
-  const outputChannel = createAzExtOutputChannel('Azure Env', 'azureEnv');
-  registerUIExtensionVariables({ context, outputChannel });
+  outputChannel = vscode.window.createOutputChannel('Azure Env');
+  context.subscriptions.push(outputChannel);
 
   // Register commands
   context.subscriptions.push(
@@ -33,7 +29,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     setTimeout(() => refreshCommand(context), 2000);
   }
 
-  outputChannel.appendLog('Azure Env extension activated');
+  outputChannel.appendLine('Azure Env extension activated');
 }
 
 async function connectCommand(context: vscode.ExtensionContext): Promise<void> {

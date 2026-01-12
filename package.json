@@ -56,7 +56,6 @@
   },
   "dependencies": {
     "@microsoft/vscode-azext-azureauth": "^5.1.1",
-    "@microsoft/vscode-azext-utils": "^4.0.3",
     "@azure/identity": "^4.13.0",
     "@azure/app-configuration": "^1.10.0",
     "@azure/arm-appconfiguration": "^5.0.0",
