@@ -1,6 +1,12 @@
 import { SecretClient } from '@azure/keyvault-secrets';
 import type { TokenCredential } from '@azure/identity';
 import { parseKeyVaultSecretUri } from '../models/configValue';
+import {
+  KeyVaultError,
+  RateLimitError,
+  isRateLimitError,
+  extractRetryAfter,
+} from '../errors';
 
 /**
  * Service for resolving secrets from Azure Key Vault.
@@ -36,10 +42,21 @@ export class KeyVaultService {
    * @returns The secret value
    */
   async resolveSecret(uri: string): Promise<string> {
-    const { vaultUrl, secretName, version } = parseKeyVaultSecretUri(uri);
-    const client = this.getClient(vaultUrl);
-    const secret = await client.getSecret(secretName, { version });
-    return secret.value ?? '';
+    try {
+      const { vaultUrl, secretName, version } = parseKeyVaultSecretUri(uri);
+      const client = this.getClient(vaultUrl);
+      const secret = await client.getSecret(secretName, { version });
+      return secret.value ?? '';
+    } catch (error) {
+      // Re-throw if already a typed error (e.g., from parseKeyVaultSecretUri)
+      if (error instanceof KeyVaultError) {
+        throw error;
+      }
+      if (isRateLimitError(error)) {
+        throw new RateLimitError('KeyVault', extractRetryAfter(error), error as Error);
+      }
+      throw new KeyVaultError(`Failed to resolve secret: ${uri}`, uri, error as Error);
+    }
   }
 
   /**

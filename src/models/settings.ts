@@ -29,16 +29,18 @@ export function getSettings(): AzureEnvSettings {
  * Save Azure Env settings to workspace configuration.
  * Only saves fields that are provided.
  */
-export async function saveSettings(
-  settings: Partial<AzureEnvSettings>
-): Promise<void> {
+export async function saveSettings(settings: Partial<AzureEnvSettings>): Promise<void> {
   const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
 
   if (settings.endpoint !== undefined) {
     await config.update('endpoint', settings.endpoint, vscode.ConfigurationTarget.Workspace);
   }
   if (settings.selectedKeys !== undefined) {
-    await config.update('selectedKeys', settings.selectedKeys, vscode.ConfigurationTarget.Workspace);
+    await config.update(
+      'selectedKeys',
+      settings.selectedKeys,
+      vscode.ConfigurationTarget.Workspace
+    );
   }
   if (settings.label !== undefined) {
     await config.update('label', settings.label, vscode.ConfigurationTarget.Workspace);

@@ -9,6 +9,9 @@ import { KeyVaultService } from './services/keyVaultService';
 import { getSettings, saveSettings } from './models/settings';
 import { runConnectFlow, StoreInfo, KeyInfo } from './commands/connect';
 import { refreshEnvironment } from './commands/refresh';
+import { RefreshGuard } from './utils/refreshGuard';
+import { StatusBarManager } from './ui/statusBar';
+import { withProgress } from './ui/progress';
 
 /**
  * Type-safe wrapper for single-select quick pick.
@@ -32,6 +35,8 @@ async function showQuickPickMulti<T extends QuickPickItem>(
 
 let authService: AuthService | undefined;
 let outputChannel: vscode.OutputChannel;
+let statusBar: StatusBarManager | undefined;
+const refreshGuard = new RefreshGuard();
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   outputChannel = vscode.window.createOutputChannel('Azure Env');
@@ -41,20 +46,41 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   authService = new AuthService();
   context.subscriptions.push(authService.getProvider());
 
+  // Initialize status bar
+  statusBar = new StatusBarManager();
+  context.subscriptions.push(statusBar);
+
   // Register commands
   context.subscriptions.push(
     vscode.commands.registerCommand('azureEnv.connect', () => connectCommand(context)),
     vscode.commands.registerCommand('azureEnv.refresh', () => refreshCommand(context))
   );
 
-  // Auto-refresh if already configured
+  // Set initial status bar state based on settings
   const settings = getSettings();
   if (settings.endpoint && settings.selectedKeys.length > 0) {
+    // Show as connected (will verify on refresh)
+    const storeName = extractStoreName(settings.endpoint);
+    statusBar.setState('connected', storeName);
+
     // Delay to avoid blocking activation
     setTimeout(() => refreshCommand(context), 2000);
   }
 
   outputChannel.appendLine('Azure Env extension activated');
+}
+
+/**
+ * Extract the store name from an App Configuration endpoint URL.
+ */
+function extractStoreName(endpoint: string): string {
+  try {
+    const url = new URL(endpoint);
+    // hostname is like "mystore.azconfig.io"
+    return url.hostname.split('.')[0];
+  } catch {
+    return endpoint;
+  }
 }
 
 async function connectCommand(context: vscode.ExtensionContext): Promise<void> {
@@ -65,6 +91,8 @@ async function connectCommand(context: vscode.ExtensionContext): Promise<void> {
     );
     return;
   }
+
+  statusBar?.setState('connecting');
 
   try {
     const result = await runConnectFlow({
@@ -81,14 +109,28 @@ async function connectCommand(context: vscode.ExtensionContext): Promise<void> {
     });
 
     if (result.success) {
+      statusBar?.setState('connected', result.storeName);
       vscode.window.showInformationMessage(`Connected to ${result.storeName}`);
       await refreshCommand(context);
     } else {
-      handleConnectFailure(result.reason);
+      // Cancelled by user or no resources - stay disconnected
+      if (result.reason !== 'cancelled') {
+        handleConnectFailure(result.reason);
+      }
+      statusBar?.setState('disconnected');
     }
   } catch (error) {
-    outputChannel.appendLine(`Connect error: ${error}`);
-    vscode.window.showErrorMessage(`Connection failed: ${error}`);
+    statusBar?.setState('error');
+    outputChannel.appendLine(`[ERROR] Connect failed: ${error}`);
+    if (error instanceof Error && error.stack) {
+      outputChannel.appendLine(error.stack);
+    }
+    outputChannel.show(true); // Show output channel, preserve focus
+    vscode.window.showErrorMessage(`Connection failed: ${error}`, 'Show Output').then((action) => {
+      if (action === 'Show Output') {
+        outputChannel.show();
+      }
+    });
   }
 }
 
@@ -126,18 +168,33 @@ async function refreshCommand(context: vscode.ExtensionContext): Promise<void> {
     return;
   }
 
+  // Prevent concurrent refreshes
+  if (!refreshGuard.tryStart()) {
+    vscode.window.showWarningMessage('Environment refresh already in progress');
+    return;
+  }
+
+  const previousState = statusBar?.getState();
+  statusBar?.setState('refreshing');
+
   try {
     const settings = getSettings();
 
     if (!settings.endpoint || settings.selectedKeys.length === 0) {
-      vscode.window.showWarningMessage('No App Configuration configured. Run "Azure Env: Connect" first.');
+      vscode.window.showWarningMessage(
+        'No App Configuration configured. Run "Azure Env: Connect" first.'
+      );
+      statusBar?.setState('disconnected');
       return;
     }
+
+    const storeName = extractStoreName(settings.endpoint);
 
     // Ensure signed in (authService initialized in activate)
     const isSignedIn = await authService!.ensureSignedIn();
     if (!isSignedIn) {
       vscode.window.showErrorMessage('Azure sign-in required');
+      statusBar?.setState('error');
       return;
     }
 
@@ -145,6 +202,7 @@ async function refreshCommand(context: vscode.ExtensionContext): Promise<void> {
     const subscriptions = await authService!.getSubscriptions();
     if (subscriptions.length === 0) {
       vscode.window.showErrorMessage('No Azure subscriptions available');
+      statusBar?.setState('error');
       return;
     }
 
@@ -155,16 +213,26 @@ async function refreshCommand(context: vscode.ExtensionContext): Promise<void> {
     const appConfigService = new AppConfigService(settings.endpoint, credential);
     const keyVaultService = new KeyVaultService(credential);
 
-    // Refresh environment
-    const result = await refreshEnvironment({
-      selectedKeys: settings.selectedKeys,
-      label: settings.label,
-      envCollection: context.environmentVariableCollection,
-      appConfigService,
-      keyVaultService,
-    });
+    // Refresh environment with progress indicator
+    const result = await withProgress(
+      {
+        title: `Azure Env: Refreshing ${settings.selectedKeys.length} keys...`,
+        cancellable: true,
+      },
+      async (progress, token) => {
+        return refreshEnvironment({
+          selectedKeys: settings.selectedKeys,
+          label: settings.label,
+          envCollection: context.environmentVariableCollection,
+          appConfigService,
+          keyVaultService,
+          progress,
+          cancellationToken: token,
+        });
+      }
+    );
 
-    // Show result
+    // Show result and update status bar
     if (result.failed > 0) {
       const errorKeys = result.errors.map((e) => e.key).join(', ');
       outputChannel.appendLine(`Failed to resolve: ${errorKeys}`);
@@ -172,14 +240,28 @@ async function refreshCommand(context: vscode.ExtensionContext): Promise<void> {
       vscode.window.showWarningMessage(
         `Environment refreshed: ${result.succeeded} succeeded, ${result.failed} failed`
       );
+      // Partial success - show as connected with warning
+      statusBar?.setState('connected', `${storeName} (${result.failed} errors)`);
     } else {
       vscode.window.showInformationMessage(
         `Environment refreshed: ${result.succeeded} variables injected`
       );
+      statusBar?.setState('connected', `${storeName} (${result.succeeded} vars)`);
     }
   } catch (error) {
-    outputChannel.appendLine(`Refresh error: ${error}`);
-    vscode.window.showErrorMessage(`Refresh failed: ${error}`);
+    outputChannel.appendLine(`[ERROR] Refresh failed: ${error}`);
+    if (error instanceof Error && error.stack) {
+      outputChannel.appendLine(error.stack);
+    }
+    outputChannel.show(true); // Show output channel, preserve focus
+    vscode.window.showErrorMessage(`Refresh failed: ${error}`, 'Show Output').then((action) => {
+      if (action === 'Show Output') {
+        outputChannel.show();
+      }
+    });
+    statusBar?.setState('error');
+  } finally {
+    refreshGuard.finish();
   }
 }
 
@@ -199,16 +281,11 @@ async function listAppConfigStores(
   return stores;
 }
 
-async function listConfigKeys(
-  endpoint: string,
-  credential: TokenCredential
-): Promise<KeyInfo[]> {
+async function listConfigKeys(endpoint: string, credential: TokenCredential): Promise<KeyInfo[]> {
   const appConfigService = new AppConfigService(endpoint, credential);
   const settings = await appConfigService.listSettings({});
 
-  return settings
-    .filter((s) => s.key)
-    .map((s) => ({ key: s.key! }));
+  return settings.filter((s) => s.key).map((s) => ({ key: s.key! }));
 }
 
 export function deactivate(): void {

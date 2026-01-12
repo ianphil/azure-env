@@ -52,8 +52,16 @@ describe('saveSettings', () => {
       label: 'prod',
     });
 
-    expect(mockUpdate).toHaveBeenCalledWith('endpoint', 'https://new.azconfig.io', vscode.ConfigurationTarget.Workspace);
-    expect(mockUpdate).toHaveBeenCalledWith('selectedKeys', ['key1'], vscode.ConfigurationTarget.Workspace);
+    expect(mockUpdate).toHaveBeenCalledWith(
+      'endpoint',
+      'https://new.azconfig.io',
+      vscode.ConfigurationTarget.Workspace
+    );
+    expect(mockUpdate).toHaveBeenCalledWith(
+      'selectedKeys',
+      ['key1'],
+      vscode.ConfigurationTarget.Workspace
+    );
     expect(mockUpdate).toHaveBeenCalledWith('label', 'prod', vscode.ConfigurationTarget.Workspace);
   });
 
@@ -64,7 +72,11 @@ describe('saveSettings', () => {
 
     await saveSettings({ endpoint: 'https://test.azconfig.io' });
 
-    expect(mockUpdate).toHaveBeenCalledWith('endpoint', 'https://test.azconfig.io', vscode.ConfigurationTarget.Workspace);
+    expect(mockUpdate).toHaveBeenCalledWith(
+      'endpoint',
+      'https://test.azconfig.io',
+      vscode.ConfigurationTarget.Workspace
+    );
     expect(mockUpdate).toHaveBeenCalledTimes(1);
   });
 });

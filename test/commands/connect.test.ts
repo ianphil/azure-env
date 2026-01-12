@@ -110,7 +110,9 @@ describe('runConnectFlow', () => {
     mockAuthService.getSubscriptions.mockResolvedValue([
       { name: 'Sub1', subscriptionId: 'sub-1', credential: {} },
     ]);
-    mockShowQuickPickSingle.mockResolvedValueOnce({ subscription: { subscriptionId: 'sub-1', credential: {} } });
+    mockShowQuickPickSingle.mockResolvedValueOnce({
+      subscription: { subscriptionId: 'sub-1', credential: {} },
+    });
     mockListStores.mockResolvedValue([]);
 
     const result = await runConnectFlow(createDeps());
@@ -164,7 +166,9 @@ describe('runConnectFlow', () => {
       .mockResolvedValueOnce({ subscription: { subscriptionId: 'sub-1', credential: {} } })
       .mockResolvedValueOnce({ endpoint: 'https://mystore.azconfig.io', name: 'mystore' });
     mockShowQuickPickMulti.mockResolvedValueOnce([{ key: 'App/Key1' }]);
-    mockListStores.mockResolvedValue([{ name: 'mystore', endpoint: 'https://mystore.azconfig.io' }]);
+    mockListStores.mockResolvedValue([
+      { name: 'mystore', endpoint: 'https://mystore.azconfig.io' },
+    ]);
     mockListKeys.mockResolvedValue([{ key: 'App/Key1' }]);
 
     const result = await runConnectFlow(createDeps());

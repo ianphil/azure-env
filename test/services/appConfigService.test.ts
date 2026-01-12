@@ -1,23 +1,24 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AppConfigService } from '../../src/services/appConfigService';
 
-const { mockListConfigurationSettings, mockGetConfigurationSetting, MockAppConfigurationClient } = vi.hoisted(() => {
-  const mocks = {
-    mockListConfigurationSettings: vi.fn(),
-    mockGetConfigurationSetting: vi.fn(),
-  };
+const { mockListConfigurationSettings, mockGetConfigurationSetting, MockAppConfigurationClient } =
+  vi.hoisted(() => {
+    const mocks = {
+      mockListConfigurationSettings: vi.fn(),
+      mockGetConfigurationSetting: vi.fn(),
+    };
 
-  class MockAppConfigurationClient {
-    listConfigurationSettings(...args: unknown[]) {
-      return mocks.mockListConfigurationSettings(...args);
+    class MockAppConfigurationClient {
+      listConfigurationSettings(...args: unknown[]) {
+        return mocks.mockListConfigurationSettings(...args);
+      }
+      getConfigurationSetting(...args: unknown[]) {
+        return mocks.mockGetConfigurationSetting(...args);
+      }
     }
-    getConfigurationSetting(...args: unknown[]) {
-      return mocks.mockGetConfigurationSetting(...args);
-    }
-  }
 
-  return { ...mocks, MockAppConfigurationClient };
-});
+    return { ...mocks, MockAppConfigurationClient };
+  });
 
 vi.mock('@azure/app-configuration', () => ({
   AppConfigurationClient: MockAppConfigurationClient,
@@ -39,7 +40,11 @@ describe('AppConfigService', () => {
     it('fetches settings with key filter and label', async () => {
       const mockSettings = [
         { key: 'App/Setting1', value: 'value1', contentType: 'text/plain' },
-        { key: 'App/Setting2', value: '{"uri":"..."}', contentType: 'application/vnd.microsoft.appconfig.keyvaultref+json' },
+        {
+          key: 'App/Setting2',
+          value: '{"uri":"..."}',
+          contentType: 'application/vnd.microsoft.appconfig.keyvaultref+json',
+        },
       ];
 
       mockListConfigurationSettings.mockReturnValue({
@@ -85,7 +90,10 @@ describe('AppConfigService', () => {
       const result = await service.getSetting('App/Setting1', 'dev');
 
       expect(result.value).toBe('value1');
-      expect(mockGetConfigurationSetting).toHaveBeenCalledWith({ key: 'App/Setting1', label: 'dev' });
+      expect(mockGetConfigurationSetting).toHaveBeenCalledWith({
+        key: 'App/Setting1',
+        label: 'dev',
+      });
     });
 
     it('fetches setting without label when label is empty', async () => {
@@ -96,7 +104,10 @@ describe('AppConfigService', () => {
 
       await service.getSetting('App/Setting1', '');
 
-      expect(mockGetConfigurationSetting).toHaveBeenCalledWith({ key: 'App/Setting1', label: undefined });
+      expect(mockGetConfigurationSetting).toHaveBeenCalledWith({
+        key: 'App/Setting1',
+        label: undefined,
+      });
     });
   });
 

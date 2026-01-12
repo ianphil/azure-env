@@ -1,5 +1,11 @@
 import { AppConfigurationClient, ConfigurationSetting } from '@azure/app-configuration';
 import type { TokenCredential } from '@azure/identity';
+import {
+  AppConfigError,
+  RateLimitError,
+  isRateLimitError,
+  extractRetryAfter,
+} from '../errors';
 
 export interface ListSettingsOptions {
   keyFilter?: string;
@@ -34,24 +40,48 @@ export class AppConfigService {
    * List configuration settings with optional key and label filters.
    */
   async listSettings(options: ListSettingsOptions): Promise<ConfigurationSetting[]> {
-    const settings: ConfigurationSetting[] = [];
-    for await (const setting of this.client.listConfigurationSettings({
-      keyFilter: options.keyFilter,
-      labelFilter: options.labelFilter,
-    })) {
-      settings.push(setting);
+    try {
+      const settings: ConfigurationSetting[] = [];
+      for await (const setting of this.client.listConfigurationSettings({
+        keyFilter: options.keyFilter,
+        labelFilter: options.labelFilter,
+      })) {
+        settings.push(setting);
+      }
+      return settings;
+    } catch (error) {
+      if (isRateLimitError(error)) {
+        throw new RateLimitError('AppConfig', extractRetryAfter(error), error as Error);
+      }
+      throw new AppConfigError(
+        `Failed to list settings: ${(error as Error).message}`,
+        options.keyFilter ?? '*',
+        options.labelFilter,
+        error as Error
+      );
     }
-    return settings;
   }
 
   /**
    * Get a single configuration setting by key.
    */
   async getSetting(key: string, label: string): Promise<ConfigurationSetting> {
-    return this.client.getConfigurationSetting({
-      key,
-      label: label || undefined,
-    });
+    try {
+      return await this.client.getConfigurationSetting({
+        key,
+        label: label || undefined,
+      });
+    } catch (error) {
+      if (isRateLimitError(error)) {
+        throw new RateLimitError('AppConfig', extractRetryAfter(error), error as Error);
+      }
+      throw new AppConfigError(
+        `Failed to get setting: ${key}`,
+        key,
+        label,
+        error as Error
+      );
+    }
   }
 
   /**

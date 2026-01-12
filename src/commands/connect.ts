@@ -35,7 +35,14 @@ export type ConnectResult =
  * Returns success with endpoint or failure with reason.
  */
 export async function runConnectFlow(deps: ConnectFlowDeps): Promise<ConnectResult> {
-  const { authService, showQuickPickSingle, showQuickPickMulti, saveSettings, listStores, listKeys } = deps;
+  const {
+    authService,
+    showQuickPickSingle,
+    showQuickPickMulti,
+    saveSettings,
+    listStores,
+    listKeys,
+  } = deps;
 
   // Step 1: Ensure signed in
   const isSignedIn = await authService.ensureSignedIn();

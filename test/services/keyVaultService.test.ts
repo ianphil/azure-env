@@ -37,7 +37,9 @@ describe('KeyVaultService', () => {
 
   describe('resolveSecret', () => {
     it('fetches secret from Key Vault', async () => {
-      const result = await service.resolveSecret('https://myvault.vault.azure.net/secrets/MySecret');
+      const result = await service.resolveSecret(
+        'https://myvault.vault.azure.net/secrets/MySecret'
+      );
 
       expect(result).toBe('secret-value');
       expect(mockGetSecret).toHaveBeenCalledWith('MySecret', { version: undefined });
@@ -67,7 +69,9 @@ describe('KeyVaultService', () => {
     it('returns empty string if secret value is undefined', async () => {
       mockGetSecret.mockResolvedValue({ value: undefined });
 
-      const result = await service.resolveSecret('https://myvault.vault.azure.net/secrets/MySecret');
+      const result = await service.resolveSecret(
+        'https://myvault.vault.azure.net/secrets/MySecret'
+      );
 
       expect(result).toBe('');
     });

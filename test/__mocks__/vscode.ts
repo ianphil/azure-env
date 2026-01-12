@@ -17,8 +17,51 @@ export const window = {
   createOutputChannel: vi.fn(() => ({
     appendLine: vi.fn(),
     dispose: vi.fn(),
+    show: vi.fn(),
   })),
+  createStatusBarItem: vi.fn(() => ({
+    text: '',
+    tooltip: '',
+    command: '',
+    backgroundColor: undefined,
+    show: vi.fn(),
+    hide: vi.fn(),
+    dispose: vi.fn(),
+  })),
+  withProgress: vi.fn(
+    async <T>(
+      _options: unknown,
+      task: (
+        progress: { report: (value: unknown) => void },
+        token: { isCancellationRequested: boolean }
+      ) => Promise<T>
+    ): Promise<T> => {
+      const progress = { report: vi.fn() };
+      const token = { isCancellationRequested: false };
+      return task(progress, token);
+    }
+  ),
 };
+
+export enum StatusBarAlignment {
+  Left = 1,
+  Right = 2,
+}
+
+export enum ProgressLocation {
+  SourceControl = 1,
+  Window = 10,
+  Notification = 15,
+}
+
+export class CancellationTokenSource {
+  token = {
+    isCancellationRequested: false,
+    onCancellationRequested: vi.fn(),
+  };
+  cancel = vi.fn();
+  dispose = vi.fn();
+}
 
 export const commands = {
   registerCommand: vi.fn(),
@@ -50,6 +93,10 @@ export class Disposable {
   dispose(): void {
     this.callOnDispose();
   }
+}
+
+export class ThemeColor {
+  constructor(public readonly id: string) {}
 }
 
 // Mock EnvironmentVariableCollection

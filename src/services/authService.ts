@@ -1,4 +1,7 @@
-import { VSCodeAzureSubscriptionProvider, AzureSubscription } from '@microsoft/vscode-azext-azureauth';
+import {
+  VSCodeAzureSubscriptionProvider,
+  AzureSubscription,
+} from '@microsoft/vscode-azext-azureauth';
 
 /**
  * Service for handling Azure authentication via VS Code's built-in Microsoft auth.
