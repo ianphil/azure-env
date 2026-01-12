@@ -1,1 +1,1 @@
-read @README.md and run git ls-files, no summary needed 
+read @README.md and specs/PRD.md and run git ls-files, no summary needed 
