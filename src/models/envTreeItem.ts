@@ -8,12 +8,14 @@ const MAX_DESCRIPTION_LENGTH = 47; // Leave room for "..."
  * Handles display formatting, secret masking, and icon selection.
  */
 export class EnvTreeItem extends vscode.TreeItem {
+  public readonly fullKey: string;
   public readonly value: string;
   public readonly isSecret: boolean;
 
   constructor(key: string, value: string, isSecret: boolean) {
     super(key, vscode.TreeItemCollapsibleState.None);
 
+    this.fullKey = key;
     this.value = value;
     this.isSecret = isSecret;
 
