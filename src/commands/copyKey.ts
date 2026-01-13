@@ -1,14 +1,15 @@
 export interface CopyKeyItem {
   fullKey?: string;
-  label?: string;
 }
 
 export interface CopyKeyDeps {
-  writeText: (value: string) => Promise<void>;
-  showInformationMessage: (message: string) => void | Promise<void>;
+  writeText: (value: string) => Thenable<void>;
+  showInformationMessage: (message: string) => Thenable<unknown>;
+  showWarningMessage?: (message: string) => Thenable<unknown>;
 }
 
 const COPY_KEY_MESSAGE = 'Key name copied to clipboard';
+const NO_KEY_MESSAGE = 'No key name available to copy';
 
 export async function copyKeyCommand(
   item: CopyKeyItem | undefined,
@@ -18,7 +19,11 @@ export async function copyKeyCommand(
     return;
   }
 
-  const key = item.fullKey ?? item.label ?? '';
-  await deps.writeText(key);
+  if (!item.fullKey) {
+    await deps.showWarningMessage?.(NO_KEY_MESSAGE);
+    return;
+  }
+
+  await deps.writeText(item.fullKey);
   await deps.showInformationMessage(COPY_KEY_MESSAGE);
 }

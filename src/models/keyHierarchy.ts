@@ -60,6 +60,7 @@ export function buildKeyHierarchy(entries: ConfigValueEntry[]): KeyHierarchyNode
   }
 
   updateNodeState(roots);
+  sortNodes(roots);
   return roots;
 }
 
@@ -69,12 +70,23 @@ function updateNodeState(nodes: KeyHierarchyNode[]): void {
 
     if (node.children.length > 0) {
       node.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
-      node.description = `${node.children.length} item${
-        node.children.length === 1 ? '' : 's'
-      }`;
+      const itemCount = `${node.children.length} item${node.children.length === 1 ? '' : 's'}`;
+      // If this folder node also has its own value, indicate that
+      if (node.isValue) {
+        node.description = `${itemCount} (has value)`;
+      } else {
+        node.description = itemCount;
+      }
     } else {
       node.collapsibleState = vscode.TreeItemCollapsibleState.None;
       node.description = undefined;
     }
+  }
+}
+
+function sortNodes(nodes: KeyHierarchyNode[]): void {
+  nodes.sort((a, b) => a.label.localeCompare(b.label));
+  for (const node of nodes) {
+    sortNodes(node.children);
   }
 }

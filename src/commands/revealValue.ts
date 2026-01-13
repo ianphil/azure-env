@@ -1,5 +1,6 @@
 export interface RevealValueItem {
   value?: string;
+  fullKey?: string;
 }
 
 export interface RevealValueDeps {
@@ -7,8 +8,12 @@ export interface RevealValueDeps {
     message: string,
     options: { modal: true },
     confirmLabel: string
-  ) => Promise<string | undefined>;
-  showInformationMessage: (message: string) => void | Promise<void>;
+  ) => Thenable<string | undefined>;
+  showInputBox: (options: {
+    value: string;
+    prompt: string;
+    ignoreFocusOut?: boolean;
+  }) => Thenable<string | undefined>;
 }
 
 const REVEAL_CONFIRM_LABEL = 'Reveal';
@@ -33,5 +38,10 @@ export async function revealValueCommand(
   }
 
   const value = item.value ?? '';
-  await deps.showInformationMessage(value);
+  const keyName = item.fullKey ?? 'secret';
+  await deps.showInputBox({
+    value,
+    prompt: `Secret value for "${keyName}" (read-only)`,
+    ignoreFocusOut: false,
+  });
 }

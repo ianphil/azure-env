@@ -126,8 +126,13 @@ export enum TreeItemCollapsibleState {
   Expanded = 2,
 }
 
+export interface TreeItemLabel {
+  label: string;
+  highlights?: [number, number][];
+}
+
 export class TreeItem {
-  label?: string;
+  label?: string | TreeItemLabel;
   description?: string;
   tooltip?: string;
   iconPath?: ThemeIcon;
@@ -135,7 +140,7 @@ export class TreeItem {
   collapsibleState?: TreeItemCollapsibleState;
 
   constructor(
-    label: string,
+    label: string | TreeItemLabel,
     collapsibleState?: TreeItemCollapsibleState
   ) {
     this.label = label;

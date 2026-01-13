@@ -1,14 +1,15 @@
 export interface CopyValueItem {
   value?: string;
-  label?: string;
 }
 
 export interface CopyValueDeps {
-  writeText: (value: string) => Promise<void>;
-  showInformationMessage: (message: string) => void | Promise<void>;
+  writeText: (value: string) => Thenable<void>;
+  showInformationMessage: (message: string) => Thenable<unknown>;
+  showWarningMessage?: (message: string) => Thenable<unknown>;
 }
 
 const COPY_VALUE_MESSAGE = 'Value copied to clipboard';
+const NO_VALUE_MESSAGE = 'No value available to copy';
 
 export async function copyValueCommand(
   item: CopyValueItem | undefined,
@@ -18,7 +19,11 @@ export async function copyValueCommand(
     return;
   }
 
-  const value = item.value ?? '';
-  await deps.writeText(value);
+  if (!item.value) {
+    await deps.showWarningMessage?.(NO_VALUE_MESSAGE);
+    return;
+  }
+
+  await deps.writeText(item.value);
   await deps.showInformationMessage(COPY_VALUE_MESSAGE);
 }
