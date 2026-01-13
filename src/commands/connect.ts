@@ -23,7 +23,7 @@ export interface ConnectFlowDeps {
   ) => Promise<T[] | undefined>;
   saveSettings: (settings: Partial<AzureEnvSettings>) => Promise<void>;
   listStores: (subscriptionId: string, credential: unknown) => Promise<StoreInfo[]>;
-  listKeys: (endpoint: string, credential: unknown) => Promise<KeyInfo[]>;
+  listKeys: (endpoint: string, subscription: unknown) => Promise<KeyInfo[]>;
 }
 
 export type ConnectResult =
@@ -96,7 +96,7 @@ export async function runConnectFlow(deps: ConnectFlowDeps): Promise<ConnectResu
   }
 
   // Step 4: List and select keys
-  const keys = await listKeys(selectedStore.endpoint, selectedSub.subscription.credential);
+  const keys = await listKeys(selectedStore.endpoint, selectedSub.subscription);
 
   if (keys.length === 0) {
     return { success: false, reason: 'no_keys' };
@@ -119,10 +119,12 @@ export async function runConnectFlow(deps: ConnectFlowDeps): Promise<ConnectResu
     return { success: false, reason: 'no_keys_selected' };
   }
 
-  // Step 5: Save settings
+  // Step 5: Save settings (including subscription for refresh)
   await saveSettings({
     endpoint: selectedStore.endpoint,
     selectedKeys: selectedKeys.map((k) => k.key),
+    subscriptionId: selectedSub.subscription.subscriptionId,
+    tenantId: selectedSub.subscription.tenantId,
   });
 
   return {

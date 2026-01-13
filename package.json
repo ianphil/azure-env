@@ -2,7 +2,7 @@
   "name": "azure-env",
   "displayName": "Azure Env",
   "description": "Inject Azure App Configuration values into terminal environment",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "publisher": "azure-env",
   "engines": {
     "vscode": "^1.108.0"
@@ -44,6 +44,16 @@
           "items": { "type": "string" },
           "default": [],
           "description": "Selected configuration keys"
+        },
+        "azureEnv.appConfiguration.subscriptionId": {
+          "type": "string",
+          "default": "",
+          "description": "Azure subscription ID for authentication"
+        },
+        "azureEnv.appConfiguration.tenantId": {
+          "type": "string",
+          "default": "",
+          "description": "Azure tenant ID for authentication"
         }
       }
     }

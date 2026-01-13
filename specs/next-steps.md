@@ -349,3 +349,40 @@ azure-env/
 1. **Missing keys:** Should extension warn when a configured key no longer exists? (Currently silently skipped)
 2. **Key prefixes in tree:** How deep should the hierarchy go? Show full paths or just organize visually?
 3. **Default vault selection:** Should connect flow prompt for default Key Vault, or leave for "Add Secret" to handle?
+
+---
+
+## Enhancements for Connect Flow
+
+### Prompt for Label During Setup
+
+**Issue:** The connect flow currently saves the endpoint and selected keys, but does not prompt for or save the label. This causes refresh to fail when keys have labels (e.g., `integration-test`, `dev`, `prod`).
+
+**Enhancement:** Add a step to the connect flow that:
+1. After selecting the store, detect unique labels from available keys
+2. If multiple labels exist, prompt user to select one (default to "dev" or first found)
+3. Save the selected label to workspace settings
+
+**Implementation in `connect.ts`:**
+```typescript
+// After selecting store, before listing keys:
+const labels = await listLabels(selectedStore.endpoint, credential);
+let selectedLabel = '';
+
+if (labels.length > 1) {
+  const labelItems = labels.map(l => ({ label: l || '(no label)', value: l }));
+  const picked = await showQuickPickSingle(labelItems, {
+    placeHolder: 'Select configuration label (e.g., dev, prod)',
+  });
+  selectedLabel = picked?.value ?? '';
+} else if (labels.length === 1) {
+  selectedLabel = labels[0];
+}
+
+// Save label in settings
+await saveSettings({
+  endpoint: selectedStore.endpoint,
+  selectedKeys: selectedKeys.map((k) => k.key),
+  label: selectedLabel,
+});
+```

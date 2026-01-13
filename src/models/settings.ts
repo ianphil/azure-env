@@ -8,6 +8,8 @@ export interface AzureEnvSettings {
   selectedKeys: string[];
   label: string;
   keyFilter: string;
+  subscriptionId: string;
+  tenantId: string;
 }
 
 const CONFIG_SECTION = 'azureEnv.appConfiguration';
@@ -22,6 +24,8 @@ export function getSettings(): AzureEnvSettings {
     selectedKeys: config.get<string[]>('selectedKeys') ?? [],
     label: config.get<string>('label') ?? '',
     keyFilter: config.get<string>('keyFilter') ?? '*',
+    subscriptionId: config.get<string>('subscriptionId') ?? '',
+    tenantId: config.get<string>('tenantId') ?? '',
   };
 }
 
@@ -47,5 +51,11 @@ export async function saveSettings(settings: Partial<AzureEnvSettings>): Promise
   }
   if (settings.keyFilter !== undefined) {
     await config.update('keyFilter', settings.keyFilter, vscode.ConfigurationTarget.Workspace);
+  }
+  if (settings.subscriptionId !== undefined) {
+    await config.update('subscriptionId', settings.subscriptionId, vscode.ConfigurationTarget.Workspace);
+  }
+  if (settings.tenantId !== undefined) {
+    await config.update('tenantId', settings.tenantId, vscode.ConfigurationTarget.Workspace);
   }
 }

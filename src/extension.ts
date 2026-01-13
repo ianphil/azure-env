@@ -6,6 +6,7 @@ import { TokenCredential } from '@azure/identity';
 import { AuthService } from './services/authService';
 import { AppConfigService } from './services/appConfigService';
 import { KeyVaultService } from './services/keyVaultService';
+import { ScopedCredential } from './services/scopedCredential';
 import { getSettings, saveSettings } from './models/settings';
 import { runConnectFlow, StoreInfo, KeyInfo } from './commands/connect';
 import { refreshEnvironment } from './commands/refresh';
@@ -103,8 +104,8 @@ async function connectCommand(context: vscode.ExtensionContext): Promise<void> {
       listStores: async (subscriptionId, credential) => {
         return listAppConfigStores(subscriptionId, credential as TokenCredential);
       },
-      listKeys: async (endpoint, credential) => {
-        return listConfigKeys(endpoint, credential as TokenCredential);
+      listKeys: async (endpoint, subscription) => {
+        return listConfigKeys(endpoint, subscription);
       },
     });
 
@@ -205,10 +206,30 @@ async function refreshCommand(context: vscode.ExtensionContext): Promise<void> {
       return;
     }
 
-    // Use first subscription's credential (could be improved to remember selected subscription)
-    const credential = subscriptions[0].credential;
+    // Find the subscription that was used during connect
+    let subscription = subscriptions.find(
+      (s) => s.subscriptionId === settings.subscriptionId && s.tenantId === settings.tenantId
+    );
 
-    // Create services
+    if (!subscription) {
+      // Fallback: try matching just subscription ID (tenant might have changed)
+      subscription = subscriptions.find((s) => s.subscriptionId === settings.subscriptionId);
+    }
+
+    if (!subscription) {
+      outputChannel.appendLine(
+        `[ERROR] Could not find subscription ${settings.subscriptionId} (tenant: ${settings.tenantId}). Available: ${subscriptions.map((s) => `${s.name} (${s.subscriptionId})`).join(', ')}`
+      );
+      vscode.window.showErrorMessage(
+        'The Azure subscription used during setup is no longer available. Please run "Azure Env: Connect" again.'
+      );
+      statusBar?.setState('error');
+      return;
+    }
+
+    const credential = new ScopedCredential(subscription);
+
+    // Create services with scoped credential for data plane access
     const appConfigService = new AppConfigService(settings.endpoint, credential);
     const keyVaultService = new KeyVaultService(credential);
 
@@ -280,7 +301,9 @@ async function listAppConfigStores(
   return stores;
 }
 
-async function listConfigKeys(endpoint: string, credential: TokenCredential): Promise<KeyInfo[]> {
+async function listConfigKeys(endpoint: string, subscription: unknown): Promise<KeyInfo[]> {
+  const sub = subscription as import('@microsoft/vscode-azext-azureauth').AzureSubscription;
+  const credential = new ScopedCredential(sub);
   const appConfigService = new AppConfigService(endpoint, credential);
   const settings = await appConfigService.listSettings({});
 

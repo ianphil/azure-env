@@ -39,10 +39,10 @@ describe('runConnectFlow', () => {
   it('saves settings after successful flow', async () => {
     mockAuthService.ensureSignedIn.mockResolvedValue(true);
     mockAuthService.getSubscriptions.mockResolvedValue([
-      { name: 'Sub1', subscriptionId: 'sub-1', credential: {} },
+      { name: 'Sub1', subscriptionId: 'sub-1', tenantId: 'tenant-1', credential: {} },
     ]);
     mockShowQuickPickSingle
-      .mockResolvedValueOnce({ subscription: { subscriptionId: 'sub-1', credential: {} } }) // subscription
+      .mockResolvedValueOnce({ subscription: { subscriptionId: 'sub-1', tenantId: 'tenant-1', credential: {} } }) // subscription
       .mockResolvedValueOnce({ endpoint: 'https://test.azconfig.io' }); // store
     mockShowQuickPickMulti.mockResolvedValueOnce([{ key: 'App/Key1' }, { key: 'App/Key2' }]); // keys
     mockListStores.mockResolvedValue([{ name: 'store', endpoint: 'https://test.azconfig.io' }]);
@@ -54,6 +54,8 @@ describe('runConnectFlow', () => {
     expect(mockSaveSettings).toHaveBeenCalledWith({
       endpoint: 'https://test.azconfig.io',
       selectedKeys: ['App/Key1', 'App/Key2'],
+      subscriptionId: 'sub-1',
+      tenantId: 'tenant-1',
     });
   });
 

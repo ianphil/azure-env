@@ -53,8 +53,16 @@ export class AppConfigService {
       if (isRateLimitError(error)) {
         throw new RateLimitError('AppConfig', extractRetryAfter(error), error as Error);
       }
+      const err = error as Error & { code?: string; statusCode?: number };
+      const details = [
+        err.message,
+        err.code ? `code=${err.code}` : '',
+        err.statusCode ? `status=${err.statusCode}` : '',
+      ]
+        .filter(Boolean)
+        .join(', ');
       throw new AppConfigError(
-        `Failed to list settings: ${(error as Error).message}`,
+        `Failed to list settings: ${details || JSON.stringify(error)}`,
         options.keyFilter ?? '*',
         options.labelFilter,
         error as Error
@@ -75,8 +83,17 @@ export class AppConfigService {
       if (isRateLimitError(error)) {
         throw new RateLimitError('AppConfig', extractRetryAfter(error), error as Error);
       }
+      const err = error as Error & { code?: string; statusCode?: number };
+      const details = [
+        err.message,
+        err.code ? `code=${err.code}` : '',
+        err.statusCode ? `status=${err.statusCode}` : '',
+        `label="${label || '(none)'}"`
+      ]
+        .filter(Boolean)
+        .join(', ');
       throw new AppConfigError(
-        `Failed to get setting: ${key}`,
+        `Failed to get setting: ${key} (${details})`,
         key,
         label,
         error as Error
