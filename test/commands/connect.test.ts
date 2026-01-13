@@ -11,6 +11,7 @@ describe('runConnectFlow', () => {
   let mockSaveSettings: ReturnType<typeof vi.fn>;
   let mockListStores: ReturnType<typeof vi.fn>;
   let mockListKeys: ReturnType<typeof vi.fn>;
+  let mockListLabels: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     mockAuthService = {
@@ -22,6 +23,7 @@ describe('runConnectFlow', () => {
     mockSaveSettings = vi.fn();
     mockListStores = vi.fn();
     mockListKeys = vi.fn();
+    mockListLabels = vi.fn();
   });
 
   function createDeps(overrides: Partial<ConnectFlowDeps> = {}): ConnectFlowDeps {
@@ -32,6 +34,7 @@ describe('runConnectFlow', () => {
       saveSettings: mockSaveSettings,
       listStores: mockListStores,
       listKeys: mockListKeys,
+      listLabels: mockListLabels,
       ...overrides,
     };
   }
@@ -46,6 +49,7 @@ describe('runConnectFlow', () => {
       .mockResolvedValueOnce({ endpoint: 'https://test.azconfig.io' }); // store
     mockShowQuickPickMulti.mockResolvedValueOnce([{ key: 'App/Key1' }, { key: 'App/Key2' }]); // keys
     mockListStores.mockResolvedValue([{ name: 'store', endpoint: 'https://test.azconfig.io' }]);
+    mockListLabels.mockResolvedValue(['']); // single empty label = auto-select
     mockListKeys.mockResolvedValue([{ key: 'App/Key1' }, { key: 'App/Key2' }]);
 
     const result = await runConnectFlow(createDeps());
@@ -56,6 +60,7 @@ describe('runConnectFlow', () => {
       selectedKeys: ['App/Key1', 'App/Key2'],
       subscriptionId: 'sub-1',
       tenantId: 'tenant-1',
+      label: '',
     });
   });
 
@@ -133,6 +138,7 @@ describe('runConnectFlow', () => {
       .mockResolvedValueOnce({ endpoint: 'https://test.azconfig.io' });
     mockShowQuickPickMulti.mockResolvedValueOnce(undefined); // cancelled key picker
     mockListStores.mockResolvedValue([{ name: 'store', endpoint: 'https://test.azconfig.io' }]);
+    mockListLabels.mockResolvedValue(['']);
     mockListKeys.mockResolvedValue([{ key: 'App/Key1' }]);
 
     const result = await runConnectFlow(createDeps());
@@ -151,6 +157,7 @@ describe('runConnectFlow', () => {
       .mockResolvedValueOnce({ endpoint: 'https://test.azconfig.io' });
     mockShowQuickPickMulti.mockResolvedValueOnce([]); // empty selection
     mockListStores.mockResolvedValue([{ name: 'store', endpoint: 'https://test.azconfig.io' }]);
+    mockListLabels.mockResolvedValue(['']);
     mockListKeys.mockResolvedValue([{ key: 'App/Key1' }]);
 
     const result = await runConnectFlow(createDeps());
@@ -171,6 +178,7 @@ describe('runConnectFlow', () => {
     mockListStores.mockResolvedValue([
       { name: 'mystore', endpoint: 'https://mystore.azconfig.io' },
     ]);
+    mockListLabels.mockResolvedValue(['']);
     mockListKeys.mockResolvedValue([{ key: 'App/Key1' }]);
 
     const result = await runConnectFlow(createDeps());
@@ -178,5 +186,143 @@ describe('runConnectFlow', () => {
     expect(result.success).toBe(true);
     expect(result.endpoint).toBe('https://mystore.azconfig.io');
     expect(result.storeName).toBe('mystore');
+  });
+
+  describe('label selection', () => {
+    it('should prompt for label when multiple labels exist', async () => {
+      mockAuthService.ensureSignedIn.mockResolvedValue(true);
+      mockAuthService.getSubscriptions.mockResolvedValue([
+        { name: 'Sub1', subscriptionId: 'sub-1', tenantId: 'tenant-1', credential: {} },
+      ]);
+      mockShowQuickPickSingle
+        .mockResolvedValueOnce({ subscription: { subscriptionId: 'sub-1', tenantId: 'tenant-1', credential: {} } }) // subscription
+        .mockResolvedValueOnce({ endpoint: 'https://test.azconfig.io', name: 'store' }) // store
+        .mockResolvedValueOnce({ label: 'dev', value: 'dev' }); // label
+      mockShowQuickPickMulti.mockResolvedValueOnce([{ key: 'App/Key1' }]);
+      mockListStores.mockResolvedValue([{ name: 'store', endpoint: 'https://test.azconfig.io' }]);
+      mockListLabels.mockResolvedValue(['dev', 'prod']);
+      mockListKeys.mockResolvedValue([{ key: 'App/Key1' }]);
+
+      const result = await runConnectFlow(createDeps());
+
+      expect(result.success).toBe(true);
+      expect(mockShowQuickPickSingle).toHaveBeenCalledTimes(3); // sub, store, label
+      expect(mockSaveSettings).toHaveBeenCalledWith({
+        endpoint: 'https://test.azconfig.io',
+        selectedKeys: ['App/Key1'],
+        subscriptionId: 'sub-1',
+        tenantId: 'tenant-1',
+        label: 'dev',
+      });
+    });
+
+    it('should auto-select when only one non-empty label exists', async () => {
+      mockAuthService.ensureSignedIn.mockResolvedValue(true);
+      mockAuthService.getSubscriptions.mockResolvedValue([
+        { name: 'Sub1', subscriptionId: 'sub-1', tenantId: 'tenant-1', credential: {} },
+      ]);
+      mockShowQuickPickSingle
+        .mockResolvedValueOnce({ subscription: { subscriptionId: 'sub-1', tenantId: 'tenant-1', credential: {} } })
+        .mockResolvedValueOnce({ endpoint: 'https://test.azconfig.io', name: 'store' });
+      mockShowQuickPickMulti.mockResolvedValueOnce([{ key: 'App/Key1' }]);
+      mockListStores.mockResolvedValue([{ name: 'store', endpoint: 'https://test.azconfig.io' }]);
+      mockListLabels.mockResolvedValue(['dev']); // single non-empty label
+      mockListKeys.mockResolvedValue([{ key: 'App/Key1' }]);
+
+      const result = await runConnectFlow(createDeps());
+
+      expect(result.success).toBe(true);
+      expect(mockShowQuickPickSingle).toHaveBeenCalledTimes(2); // no label prompt
+      expect(mockSaveSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ label: 'dev' })
+      );
+    });
+
+    it('should use empty string when only empty label exists', async () => {
+      mockAuthService.ensureSignedIn.mockResolvedValue(true);
+      mockAuthService.getSubscriptions.mockResolvedValue([
+        { name: 'Sub1', subscriptionId: 'sub-1', tenantId: 'tenant-1', credential: {} },
+      ]);
+      mockShowQuickPickSingle
+        .mockResolvedValueOnce({ subscription: { subscriptionId: 'sub-1', tenantId: 'tenant-1', credential: {} } })
+        .mockResolvedValueOnce({ endpoint: 'https://test.azconfig.io', name: 'store' });
+      mockShowQuickPickMulti.mockResolvedValueOnce([{ key: 'App/Key1' }]);
+      mockListStores.mockResolvedValue([{ name: 'store', endpoint: 'https://test.azconfig.io' }]);
+      mockListLabels.mockResolvedValue(['']); // single empty label
+      mockListKeys.mockResolvedValue([{ key: 'App/Key1' }]);
+
+      const result = await runConnectFlow(createDeps());
+
+      expect(result.success).toBe(true);
+      expect(mockShowQuickPickSingle).toHaveBeenCalledTimes(2); // no label prompt
+      expect(mockSaveSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ label: '' })
+      );
+    });
+
+    it('should filter keys by selected label', async () => {
+      mockAuthService.ensureSignedIn.mockResolvedValue(true);
+      mockAuthService.getSubscriptions.mockResolvedValue([
+        { name: 'Sub1', subscriptionId: 'sub-1', tenantId: 'tenant-1', credential: {} },
+      ]);
+      mockShowQuickPickSingle
+        .mockResolvedValueOnce({ subscription: { subscriptionId: 'sub-1', tenantId: 'tenant-1', credential: {} } })
+        .mockResolvedValueOnce({ endpoint: 'https://test.azconfig.io', name: 'store' })
+        .mockResolvedValueOnce({ label: 'prod', value: 'prod' });
+      mockShowQuickPickMulti.mockResolvedValueOnce([{ key: 'App/Key1' }]);
+      mockListStores.mockResolvedValue([{ name: 'store', endpoint: 'https://test.azconfig.io' }]);
+      mockListLabels.mockResolvedValue(['dev', 'prod']);
+      mockListKeys.mockResolvedValue([{ key: 'App/Key1' }]);
+
+      await runConnectFlow(createDeps());
+
+      // listKeys should be called with the selected label
+      expect(mockListKeys).toHaveBeenCalledWith(
+        'https://test.azconfig.io',
+        expect.anything(),
+        'prod'
+      );
+    });
+
+    it('should handle label selection cancellation', async () => {
+      mockAuthService.ensureSignedIn.mockResolvedValue(true);
+      mockAuthService.getSubscriptions.mockResolvedValue([
+        { name: 'Sub1', subscriptionId: 'sub-1', tenantId: 'tenant-1', credential: {} },
+      ]);
+      mockShowQuickPickSingle
+        .mockResolvedValueOnce({ subscription: { subscriptionId: 'sub-1', tenantId: 'tenant-1', credential: {} } })
+        .mockResolvedValueOnce({ endpoint: 'https://test.azconfig.io', name: 'store' })
+        .mockResolvedValueOnce(undefined); // user cancels label picker
+      mockListStores.mockResolvedValue([{ name: 'store', endpoint: 'https://test.azconfig.io' }]);
+      mockListLabels.mockResolvedValue(['dev', 'prod']);
+
+      const result = await runConnectFlow(createDeps());
+
+      expect(result.success).toBe(false);
+      expect(result.reason).toBe('cancelled');
+      expect(mockSaveSettings).not.toHaveBeenCalled();
+    });
+
+    it('should handle empty labels list by using empty string', async () => {
+      mockAuthService.ensureSignedIn.mockResolvedValue(true);
+      mockAuthService.getSubscriptions.mockResolvedValue([
+        { name: 'Sub1', subscriptionId: 'sub-1', tenantId: 'tenant-1', credential: {} },
+      ]);
+      mockShowQuickPickSingle
+        .mockResolvedValueOnce({ subscription: { subscriptionId: 'sub-1', tenantId: 'tenant-1', credential: {} } })
+        .mockResolvedValueOnce({ endpoint: 'https://test.azconfig.io', name: 'store' });
+      mockShowQuickPickMulti.mockResolvedValueOnce([{ key: 'App/Key1' }]);
+      mockListStores.mockResolvedValue([{ name: 'store', endpoint: 'https://test.azconfig.io' }]);
+      mockListLabels.mockResolvedValue([]); // no labels at all
+      mockListKeys.mockResolvedValue([{ key: 'App/Key1' }]);
+
+      const result = await runConnectFlow(createDeps());
+
+      expect(result.success).toBe(true);
+      expect(mockShowQuickPickSingle).toHaveBeenCalledTimes(2); // no label prompt
+      expect(mockSaveSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ label: '' })
+      );
+    });
   });
 });
