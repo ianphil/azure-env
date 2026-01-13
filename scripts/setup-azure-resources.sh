@@ -73,81 +73,117 @@ KEY_VAULT_ID=$(az keyvault show --name "$KEY_VAULT_NAME" --resource-group "$RESO
 # Assign RBAC roles
 echo "5. Assigning RBAC roles..."
 
-# App Configuration Data Reader (for reading in tests)
-if az role assignment list --assignee "$USER_ID" --scope "$APP_CONFIG_ID" --role "App Configuration Data Reader" --query "[0]" -o tsv &>/dev/null; then
-    echo "   App Configuration Data Reader already assigned, skipping."
-else
-    az role assignment create \
-        --role "App Configuration Data Reader" \
-        --assignee "$USER_ID" \
-        --scope "$APP_CONFIG_ID" \
-        --output none 2>/dev/null || echo "   App Configuration Data Reader may already exist."
-    echo "   Assigned App Configuration Data Reader."
-fi
+# Helper function to check if role is assigned (az role assignment list returns 0 even when empty)
+role_exists() {
+    local assignee="$1"
+    local scope="$2"
+    local role="$3"
+    [ -n "$(az role assignment list --assignee "$assignee" --scope "$scope" --role "$role" --query "[0].id" -o tsv 2>/dev/null)" ]
+}
 
-# App Configuration Data Owner (for writing test data)
-if az role assignment list --assignee "$USER_ID" --scope "$APP_CONFIG_ID" --role "App Configuration Data Owner" --query "[0]" -o tsv &>/dev/null; then
+# App Configuration Data Owner (read + write)
+if role_exists "$USER_ID" "$APP_CONFIG_ID" "App Configuration Data Owner"; then
     echo "   App Configuration Data Owner already assigned, skipping."
 else
     az role assignment create \
         --role "App Configuration Data Owner" \
         --assignee "$USER_ID" \
         --scope "$APP_CONFIG_ID" \
-        --output none 2>/dev/null || echo "   App Configuration Data Owner may already exist."
+        --output none
     echo "   Assigned App Configuration Data Owner."
 fi
 
-# Key Vault Secrets User (for reading in tests)
-if az role assignment list --assignee "$USER_ID" --scope "$KEY_VAULT_ID" --role "Key Vault Secrets User" --query "[0]" -o tsv &>/dev/null; then
-    echo "   Key Vault Secrets User already assigned, skipping."
-else
-    az role assignment create \
-        --role "Key Vault Secrets User" \
-        --assignee "$USER_ID" \
-        --scope "$KEY_VAULT_ID" \
-        --output none 2>/dev/null || echo "   Key Vault Secrets User may already exist."
-    echo "   Assigned Key Vault Secrets User."
-fi
-
-# Key Vault Secrets Officer (for writing test data)
-if az role assignment list --assignee "$USER_ID" --scope "$KEY_VAULT_ID" --role "Key Vault Secrets Officer" --query "[0]" -o tsv &>/dev/null; then
+# Key Vault Secrets Officer (read + write)
+if role_exists "$USER_ID" "$KEY_VAULT_ID" "Key Vault Secrets Officer"; then
     echo "   Key Vault Secrets Officer already assigned, skipping."
 else
     az role assignment create \
         --role "Key Vault Secrets Officer" \
         --assignee "$USER_ID" \
         --scope "$KEY_VAULT_ID" \
-        --output none 2>/dev/null || echo "   Key Vault Secrets Officer may already exist."
+        --output none
     echo "   Assigned Key Vault Secrets Officer."
 fi
-
-# Wait for RBAC propagation
-echo "6. Waiting for RBAC propagation (30 seconds)..."
-sleep 30
-
-# Seed test data
-echo "7. Seeding test data..."
 
 VAULT_URL="https://${KEY_VAULT_NAME}.vault.azure.net"
 ENDPOINT=$(az appconfig show --name "$APP_CONFIG_NAME" --resource-group "$RESOURCE_GROUP" --query endpoint -o tsv)
 
-# Create test secret in Key Vault
-echo "   Creating test secret in Key Vault..."
-az keyvault secret set \
-    --vault-name "$KEY_VAULT_NAME" \
-    --name "$TEST_SECRET_NAME" \
-    --value "$TEST_SECRET_VALUE" \
-    --output none 2>/dev/null || echo "   Secret may already exist, updating..."
+# Poll for RBAC access
+echo "6. Waiting for RBAC propagation..."
 
-# Create plain config value in App Configuration
-echo "   Creating plain config value in App Configuration..."
-az appconfig kv set \
-    --name "$APP_CONFIG_NAME" \
-    --key "$TEST_CONFIG_KEY" \
-    --value "$TEST_CONFIG_VALUE" \
-    --label "integration-test" \
-    --yes \
-    --output none
+MAX_ATTEMPTS=30
+POLL_INTERVAL=10
+
+# Poll Key Vault write access
+echo "   Checking Key Vault write access..."
+attempt=1
+while [ $attempt -le $MAX_ATTEMPTS ]; do
+    if az keyvault secret set --vault-name "$KEY_VAULT_NAME" --name "$TEST_SECRET_NAME" --value "$TEST_SECRET_VALUE" --output none 2>/dev/null; then
+        echo "   Key Vault write access confirmed."
+        break
+    fi
+    if [ $attempt -eq $MAX_ATTEMPTS ]; then
+        echo "   ERROR: Key Vault write access not available after $((MAX_ATTEMPTS * POLL_INTERVAL)) seconds."
+        exit 1
+    fi
+    echo "   Attempt $attempt/$MAX_ATTEMPTS - waiting ${POLL_INTERVAL}s..."
+    sleep $POLL_INTERVAL
+    ((attempt++))
+done
+
+# Poll Key Vault read access
+echo "   Checking Key Vault read access..."
+attempt=1
+while [ $attempt -le $MAX_ATTEMPTS ]; do
+    if az keyvault secret show --vault-name "$KEY_VAULT_NAME" --name "$TEST_SECRET_NAME" --output none 2>/dev/null; then
+        echo "   Key Vault read access confirmed."
+        break
+    fi
+    if [ $attempt -eq $MAX_ATTEMPTS ]; then
+        echo "   ERROR: Key Vault read access not available after $((MAX_ATTEMPTS * POLL_INTERVAL)) seconds."
+        exit 1
+    fi
+    echo "   Attempt $attempt/$MAX_ATTEMPTS - waiting ${POLL_INTERVAL}s..."
+    sleep $POLL_INTERVAL
+    ((attempt++))
+done
+
+# Poll App Configuration write access
+echo "   Checking App Configuration write access..."
+attempt=1
+while [ $attempt -le $MAX_ATTEMPTS ]; do
+    if az appconfig kv set --name "$APP_CONFIG_NAME" --key "$TEST_CONFIG_KEY" --value "$TEST_CONFIG_VALUE" --label "integration-test" --yes --output none 2>/dev/null; then
+        echo "   App Configuration write access confirmed."
+        break
+    fi
+    if [ $attempt -eq $MAX_ATTEMPTS ]; then
+        echo "   ERROR: App Configuration write access not available after $((MAX_ATTEMPTS * POLL_INTERVAL)) seconds."
+        exit 1
+    fi
+    echo "   Attempt $attempt/$MAX_ATTEMPTS - waiting ${POLL_INTERVAL}s..."
+    sleep $POLL_INTERVAL
+    ((attempt++))
+done
+
+# Poll App Configuration read access
+echo "   Checking App Configuration read access..."
+attempt=1
+while [ $attempt -le $MAX_ATTEMPTS ]; do
+    if az appconfig kv show --name "$APP_CONFIG_NAME" --key "$TEST_CONFIG_KEY" --label "integration-test" --output none 2>/dev/null; then
+        echo "   App Configuration read access confirmed."
+        break
+    fi
+    if [ $attempt -eq $MAX_ATTEMPTS ]; then
+        echo "   ERROR: App Configuration read access not available after $((MAX_ATTEMPTS * POLL_INTERVAL)) seconds."
+        exit 1
+    fi
+    echo "   Attempt $attempt/$MAX_ATTEMPTS - waiting ${POLL_INTERVAL}s..."
+    sleep $POLL_INTERVAL
+    ((attempt++))
+done
+
+# Seed remaining test data
+echo "7. Seeding test data..."
 
 # Create Key Vault reference in App Configuration
 echo "   Creating Key Vault reference in App Configuration..."
@@ -159,6 +195,15 @@ az appconfig kv set-keyvault \
     --label "integration-test" \
     --yes \
     --output none
+
+# Verify all test data is accessible
+echo "8. Verifying test data..."
+echo -n "   Key Vault secret: "
+az keyvault secret show --vault-name "$KEY_VAULT_NAME" --name "$TEST_SECRET_NAME" --query "name" -o tsv
+echo -n "   App Config plain value: "
+az appconfig kv show --name "$APP_CONFIG_NAME" --key "$TEST_CONFIG_KEY" --label "integration-test" --query "key" -o tsv
+echo -n "   App Config KV reference: "
+az appconfig kv show --name "$APP_CONFIG_NAME" --key "$TEST_KV_REF_KEY" --label "integration-test" --query "key" -o tsv
 
 echo ""
 echo "=== Setup Complete ==="
