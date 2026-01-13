@@ -12,7 +12,8 @@ This document outlines what needs to be added after the core implementation to r
 | Environment injection | ✅ | ✅ |
 | Refresh command | ✅ | ✅ |
 | Key Vault reference resolution | ✅ | ✅ |
-| Tree view UI | ❌ | ✅ |
+| Label selection in connect flow | ✅ | ✅ |
+| Tree view UI | ✅ | ✅ |
 | Add configuration value | ❌ | ✅ |
 | Add secret | ❌ | ✅ |
 | Disconnect command | ❌ | ✅ |
@@ -20,46 +21,18 @@ This document outlines what needs to be added after the core implementation to r
 
 ---
 
-## 1. Tree View Provider
+## ~~1. Tree View Provider~~ ✅ COMPLETED
 
-**File:** `src/providers/envTreeProvider.ts`
+**Status:** Implemented in feature/tree-view branch
 
-**Purpose:** Display configured keys in a hierarchical tree view in the Azure view container.
+**Implementation:** See `specs/003-tree-view-tdd-plan.md` for details.
 
-**Requirements:**
-- Implement `vscode.TreeDataProvider<EnvTreeItem>`
-- Show keys organized by `/` delimiter hierarchy
-- Distinguish plain values vs Key Vault references (🔐 icon)
-- Show masked values for secrets (`••••••••`)
-- Context menu: Copy Value, Copy Key Name, Reveal Value, Refresh
-
-**Package.json additions:**
-```json
-{
-  "contributes": {
-    "views": {
-      "azure": [{
-        "id": "azureEnv.environment",
-        "name": "Environment",
-        "when": "azureEnv.configured"
-      }]
-    },
-    "menus": {
-      "view/item/context": [
-        { "command": "azureEnv.copyValue", "when": "view == azureEnv.environment" },
-        { "command": "azureEnv.copyKey", "when": "view == azureEnv.environment" },
-        { "command": "azureEnv.revealValue", "when": "view == azureEnv.environment && viewItem == secret" }
-      ]
-    }
-  }
-}
-```
-
-**Implementation notes:**
-- Use `vscode.window.createTreeView()` with the provider
-- Store resolved values in memory for display
-- Update tree when refresh completes
-- Set `azureEnv.configured` context for conditional view visibility
+- EnvTreeItem model with secret detection
+- Key hierarchy parser for `/` delimiter organization
+- EnvTreeProvider with TreeDataProvider implementation
+- Copy Value, Copy Key, Reveal Value commands
+- Package.json views, menus, and commands configured
+- Extension wiring for tree view and refresh integration
 
 ---
 
@@ -186,40 +159,9 @@ export async function executeDisconnect(): Promise<void> {
 
 ---
 
-## 5. Additional Commands for Tree View
+## ~~5. Additional Commands for Tree View~~ ✅ COMPLETED
 
-**Files:** `src/commands/copyValue.ts`, `src/commands/copyKey.ts`, `src/commands/revealValue.ts`
-
-**Copy Value:**
-```typescript
-export async function executeCopyValue(item: EnvTreeItem): Promise<void> {
-  await vscode.env.clipboard.writeText(item.value);
-  vscode.window.showInformationMessage('Value copied to clipboard.');
-}
-```
-
-**Copy Key:**
-```typescript
-export async function executeCopyKey(item: EnvTreeItem): Promise<void> {
-  await vscode.env.clipboard.writeText(item.originalKey);
-  vscode.window.showInformationMessage('Key copied to clipboard.');
-}
-```
-
-**Reveal Value (for secrets):**
-```typescript
-export async function executeRevealValue(item: EnvTreeItem): Promise<void> {
-  const reveal = await vscode.window.showWarningMessage(
-    `Reveal secret value for "${item.originalKey}"?`,
-    { modal: true },
-    'Reveal'
-  );
-
-  if (reveal === 'Reveal') {
-    vscode.window.showInformationMessage(item.value);
-  }
-}
-```
+**Status:** Implemented as part of Tree View Provider (see section 1)
 
 ---
 
@@ -282,8 +224,15 @@ async listVaults(subscriptionId: string): Promise<Array<{ name: string; vaultUri
         }
       }
     },
+    "viewsContainers": {
+      "activitybar": [{
+        "id": "azureEnv",
+        "title": "Azure Env",
+        "icon": "$(key)"
+      }]
+    },
     "views": {
-      "azure": [{
+      "azureEnv": [{
         "id": "azureEnv.environment",
         "name": "Environment",
         "when": "azureEnv.configured"
@@ -306,18 +255,20 @@ azure-env/
 │   │   ├── appConfigService.ts    # + createSetting, createKeyVaultReference
 │   │   └── keyVaultService.ts     # + createSecret, listVaults
 │   ├── providers/
-│   │   └── envTreeProvider.ts     # NEW
+│   │   └── envTreeProvider.ts     # ✅ DONE
 │   ├── commands/
 │   │   ├── connect.ts
 │   │   ├── refresh.ts
 │   │   ├── addConfig.ts           # NEW
 │   │   ├── addSecret.ts           # NEW
 │   │   ├── disconnect.ts          # NEW
-│   │   ├── copyValue.ts           # NEW
-│   │   ├── copyKey.ts             # NEW
-│   │   └── revealValue.ts         # NEW
+│   │   ├── copyValue.ts           # ✅ DONE
+│   │   ├── copyKey.ts             # ✅ DONE
+│   │   └── revealValue.ts         # ✅ DONE
 │   └── models/
 │       ├── settings.ts            # + defaultVault
+│       ├── envTreeItem.ts         # ✅ DONE
+│       ├── keyHierarchy.ts        # ✅ DONE
 │       └── configValue.ts
 ```
 
@@ -326,8 +277,8 @@ azure-env/
 ## Implementation Order (After Core)
 
 1. **Disconnect command** - Simple, standalone
-2. **Tree view provider** - Foundation for visual features
-3. **Copy/reveal commands** - Tree view context actions
+2. ~~**Tree view provider** - Foundation for visual features~~ ✅
+3. ~~**Copy/reveal commands** - Tree view context actions~~ ✅
 4. **Add configuration value** - Write to App Config
 5. **List Key Vaults** - Required for add secret
 6. **Add secret command** - Most complex, depends on others
@@ -336,53 +287,32 @@ azure-env/
 
 ## Testing Additions for MVP
 
-- Tree view rendering with nested keys
+- ~~Tree view rendering with nested keys~~ ✅
 - Add config creates setting with correct label
 - Add secret creates Key Vault secret and optional reference
 - Disconnect clears all state
-- Copy/reveal commands work from tree context
+- ~~Copy/reveal commands work from tree context~~ ✅
 
 ---
 
 ## Open Questions to Resolve Before MVP
 
 1. **Missing keys:** Should extension warn when a configured key no longer exists? (Currently silently skipped)
-2. **Key prefixes in tree:** How deep should the hierarchy go? Show full paths or just organize visually?
+2. ~~**Key prefixes in tree:** How deep should the hierarchy go? Show full paths or just organize visually?~~ ✅ Resolved: Full hierarchy with `/` delimiter
 3. **Default vault selection:** Should connect flow prompt for default Key Vault, or leave for "Add Secret" to handle?
 
 ---
 
-## Enhancements for Connect Flow
+## ~~Enhancements for Connect Flow~~ ✅ COMPLETED
 
-### Prompt for Label During Setup
+### ~~Prompt for Label During Setup~~ ✅
 
-**Issue:** The connect flow currently saves the endpoint and selected keys, but does not prompt for or save the label. This causes refresh to fail when keys have labels (e.g., `integration-test`, `dev`, `prod`).
+**Status:** Implemented in PR #2 (merged to master)
 
-**Enhancement:** Add a step to the connect flow that:
-1. After selecting the store, detect unique labels from available keys
-2. If multiple labels exist, prompt user to select one (default to "dev" or first found)
-3. Save the selected label to workspace settings
+**Implementation:** See `specs/002-label-selection-plan.md` for details.
 
-**Implementation in `connect.ts`:**
-```typescript
-// After selecting store, before listing keys:
-const labels = await listLabels(selectedStore.endpoint, credential);
-let selectedLabel = '';
-
-if (labels.length > 1) {
-  const labelItems = labels.map(l => ({ label: l || '(no label)', value: l }));
-  const picked = await showQuickPickSingle(labelItems, {
-    placeHolder: 'Select configuration label (e.g., dev, prod)',
-  });
-  selectedLabel = picked?.value ?? '';
-} else if (labels.length === 1) {
-  selectedLabel = labels[0];
-}
-
-// Save label in settings
-await saveSettings({
-  endpoint: selectedStore.endpoint,
-  selectedKeys: selectedKeys.map((k) => k.key),
-  label: selectedLabel,
-});
-```
+- Added `listLabels()` method to AppConfigService
+- Connect flow now prompts for label when multiple labels exist
+- Auto-selects when only one label exists
+- Keys filtered by selected label
+- Label saved to workspace settings for refresh
