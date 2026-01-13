@@ -10,6 +10,11 @@ import { ScopedCredential } from './services/scopedCredential';
 import { getSettings, saveSettings } from './models/settings';
 import { runConnectFlow, StoreInfo, KeyInfo } from './commands/connect';
 import { refreshEnvironment } from './commands/refresh';
+import { copyValueCommand } from './commands/copyValue';
+import { copyKeyCommand } from './commands/copyKey';
+import { revealValueCommand } from './commands/revealValue';
+import type { EnvTreeItem } from './models/envTreeItem';
+import { EnvTreeProvider } from './providers/envTreeProvider';
 import { RefreshGuard } from './utils/refreshGuard';
 import { StatusBarManager } from './ui/statusBar';
 import { withProgress } from './ui/progress';
@@ -37,6 +42,7 @@ async function showQuickPickMulti<T extends QuickPickItem>(
 let authService: AuthService | undefined;
 let outputChannel: vscode.OutputChannel;
 let statusBar: StatusBarManager | undefined;
+let envTreeProvider: EnvTreeProvider | undefined;
 const refreshGuard = new RefreshGuard();
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
@@ -51,10 +57,36 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   statusBar = new StatusBarManager();
   context.subscriptions.push(statusBar);
 
+  // Initialize tree view
+  envTreeProvider = new EnvTreeProvider();
+  const treeView = vscode.window.createTreeView('azureEnv.environment', {
+    treeDataProvider: envTreeProvider,
+  });
+  context.subscriptions.push(treeView);
+
   // Register commands
   context.subscriptions.push(
     vscode.commands.registerCommand('azureEnv.connect', () => connectCommand(context)),
-    vscode.commands.registerCommand('azureEnv.refresh', () => refreshCommand(context))
+    vscode.commands.registerCommand('azureEnv.refresh', () => refreshCommand(context)),
+    vscode.commands.registerCommand('azureEnv.copyValue', (item?: EnvTreeItem) =>
+      copyValueCommand(item, {
+        writeText: vscode.env.clipboard.writeText,
+        showInformationMessage: vscode.window.showInformationMessage,
+      })
+    ),
+    vscode.commands.registerCommand('azureEnv.copyKey', (item?: EnvTreeItem) =>
+      copyKeyCommand(item, {
+        writeText: vscode.env.clipboard.writeText,
+        showInformationMessage: vscode.window.showInformationMessage,
+      })
+    ),
+    vscode.commands.registerCommand('azureEnv.revealValue', (item?: EnvTreeItem) =>
+      revealValueCommand(item, {
+        showWarningMessage: (message, options, confirmLabel) =>
+          vscode.window.showWarningMessage(message, options, confirmLabel),
+        showInformationMessage: vscode.window.showInformationMessage,
+      })
+    )
   );
 
   // Set initial status bar state based on settings
@@ -188,6 +220,7 @@ async function refreshCommand(context: vscode.ExtensionContext): Promise<void> {
         'No App Configuration configured. Run "Azure Env: Connect" first.'
       );
       statusBar?.setState('disconnected');
+      envTreeProvider?.clear();
       return;
     }
 
@@ -254,6 +287,8 @@ async function refreshCommand(context: vscode.ExtensionContext): Promise<void> {
         });
       }
     );
+
+    envTreeProvider?.setData(result.items);
 
     // Show result and update status bar
     if (result.failed > 0) {

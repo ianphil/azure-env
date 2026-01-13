@@ -19,8 +19,54 @@
       {
         "command": "azureEnv.refresh",
         "title": "Azure Env: Refresh Environment"
+      },
+      {
+        "command": "azureEnv.copyValue",
+        "title": "Copy Value"
+      },
+      {
+        "command": "azureEnv.copyKey",
+        "title": "Copy Key Name"
+      },
+      {
+        "command": "azureEnv.revealValue",
+        "title": "Reveal Value"
       }
     ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "azureEnv",
+          "title": "Azure Env",
+          "icon": "$(key)"
+        }
+      ]
+    },
+    "views": {
+      "azureEnv": [
+        {
+          "id": "azureEnv.environment",
+          "name": "Environment",
+          "when": "azureEnv.configured"
+        }
+      ]
+    },
+    "menus": {
+      "view/item/context": [
+        {
+          "command": "azureEnv.copyValue",
+          "when": "view == azureEnv.environment"
+        },
+        {
+          "command": "azureEnv.copyKey",
+          "when": "view == azureEnv.environment"
+        },
+        {
+          "command": "azureEnv.revealValue",
+          "when": "view == azureEnv.environment && viewItem == secret"
+        }
+      ]
+    },
     "configuration": {
       "title": "Azure Env",
       "properties": {

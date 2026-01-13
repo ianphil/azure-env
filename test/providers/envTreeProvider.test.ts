@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { EnvTreeProvider } from '../../src/providers/envTreeProvider';
 import { EnvTreeItem } from '../../src/models/envTreeItem';
-import { TreeItem, TreeItemCollapsibleState } from '../__mocks__/vscode';
+import { TreeItem, TreeItemCollapsibleState, commands } from '../__mocks__/vscode';
 
 const entries = [
   { key: 'App/Database/Host', value: 'localhost', isSecret: false },
@@ -48,6 +48,24 @@ describe('EnvTreeProvider', () => {
 
     provider.clear();
     expect(provider.getChildren()).toEqual([]);
+  });
+
+  it('sets configured context on setData and clear', () => {
+    const provider = new EnvTreeProvider();
+
+    provider.setData(entries);
+    expect(commands.executeCommand).toHaveBeenCalledWith(
+      'setContext',
+      'azureEnv.configured',
+      true
+    );
+
+    provider.clear();
+    expect(commands.executeCommand).toHaveBeenCalledWith(
+      'setContext',
+      'azureEnv.configured',
+      false
+    );
   });
 
   it('returns tree items for folders and leaves', () => {

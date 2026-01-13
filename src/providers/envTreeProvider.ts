@@ -33,11 +33,13 @@ export class EnvTreeProvider implements vscode.TreeDataProvider<KeyHierarchyNode
 
   setData(entries: ConfigValueEntry[]): void {
     this.rootNodes = buildKeyHierarchy(entries);
+    void vscode.commands.executeCommand('setContext', 'azureEnv.configured', true);
     this.emitter.fire(undefined);
   }
 
   clear(): void {
     this.rootNodes = [];
+    void vscode.commands.executeCommand('setContext', 'azureEnv.configured', false);
     this.emitter.fire(undefined);
   }
 }

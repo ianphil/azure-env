@@ -6,6 +6,7 @@ import {
   isKeyVaultReference,
   parseKeyVaultReference,
 } from '../models/configValue';
+import type { ConfigValueEntry } from '../models/keyHierarchy';
 import { AzureEnvError } from '../errors';
 import type { ProgressReporter } from '../ui/progress';
 
@@ -30,6 +31,7 @@ export interface RefreshResult {
   succeeded: number;
   failed: number;
   errors: RefreshError[];
+  items: ConfigValueEntry[];
 }
 
 /**
@@ -54,6 +56,7 @@ export async function refreshEnvironment(options: RefreshOptions): Promise<Refre
     succeeded: 0,
     failed: 0,
     errors: [],
+    items: [],
   };
 
   const totalKeys = selectedKeys.length;
@@ -75,9 +78,10 @@ export async function refreshEnvironment(options: RefreshOptions): Promise<Refre
       // Fetch setting from App Configuration
       const setting = await appConfigService.getSetting(key, label);
       let value = setting.value ?? '';
+      const isSecret = isKeyVaultReference(setting.contentType);
 
       // Resolve Key Vault reference if needed
-      if (isKeyVaultReference(setting.contentType)) {
+      if (isSecret) {
         const secretUri = parseKeyVaultReference(value);
         value = await keyVaultService.resolveSecret(secretUri);
       }
@@ -85,6 +89,7 @@ export async function refreshEnvironment(options: RefreshOptions): Promise<Refre
       // Transform key to environment variable name and inject
       const envName = transformKeyToEnvVar(key);
       envCollection.replace(envName, value);
+      result.items.push({ key, value, isSecret });
       result.succeeded++;
     } catch (error) {
       result.failed++;

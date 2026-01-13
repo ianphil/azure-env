@@ -44,10 +44,11 @@ describe('refreshEnvironment', () => {
       contentType: 'text/plain',
     });
 
-    await refreshEnvironment(createOptions());
+    const result = await refreshEnvironment(createOptions());
 
     expect(mockEnvCollection.clear).toHaveBeenCalled();
     expect(mockEnvCollection.replace).toHaveBeenCalledWith('APP_KEY', 'value');
+    expect(result.items).toEqual([{ key: 'App/Key', value: 'value', isSecret: false }]);
   });
 
   it('transforms keys to environment variable format', async () => {
@@ -70,12 +71,15 @@ describe('refreshEnvironment', () => {
     });
     mockKeyVaultService.resolveSecret.mockResolvedValue('resolved-secret');
 
-    await refreshEnvironment(createOptions({ selectedKeys: ['App/Secret'] }));
+    const result = await refreshEnvironment(createOptions({ selectedKeys: ['App/Secret'] }));
 
     expect(mockKeyVaultService.resolveSecret).toHaveBeenCalledWith(
       'https://vault.vault.azure.net/secrets/MySecret'
     );
     expect(mockEnvCollection.replace).toHaveBeenCalledWith('APP_SECRET', 'resolved-secret');
+    expect(result.items).toEqual([
+      { key: 'App/Secret', value: 'resolved-secret', isSecret: true },
+    ]);
   });
 
   it('continues on partial failures', async () => {
@@ -91,6 +95,7 @@ describe('refreshEnvironment', () => {
     expect(result.succeeded).toBe(2);
     expect(result.failed).toBe(1);
     expect(result.errors).toHaveLength(1);
+    expect(result.items).toHaveLength(2);
     expect(mockEnvCollection.replace).toHaveBeenCalledTimes(2);
   });
 
@@ -99,6 +104,7 @@ describe('refreshEnvironment', () => {
 
     expect(result.succeeded).toBe(0);
     expect(result.failed).toBe(0);
+    expect(result.items).toEqual([]);
     expect(mockEnvCollection.clear).toHaveBeenCalled();
   });
 
@@ -114,6 +120,7 @@ describe('refreshEnvironment', () => {
 
     expect(result.succeeded).toBe(0);
     expect(result.failed).toBe(1);
+    expect(result.items).toEqual([]);
     expect(mockEnvCollection.replace).not.toHaveBeenCalled();
   });
 
@@ -124,9 +131,10 @@ describe('refreshEnvironment', () => {
       contentType: 'text/plain',
     });
 
-    await refreshEnvironment(createOptions());
+    const result = await refreshEnvironment(createOptions());
 
     expect(mockEnvCollection.replace).toHaveBeenCalledWith('APP_KEY', '');
+    expect(result.items).toEqual([{ key: 'App/Key', value: '', isSecret: false }]);
   });
 
   it('handles undefined value gracefully', async () => {
@@ -136,8 +144,9 @@ describe('refreshEnvironment', () => {
       contentType: 'text/plain',
     });
 
-    await refreshEnvironment(createOptions());
+    const result = await refreshEnvironment(createOptions());
 
     expect(mockEnvCollection.replace).toHaveBeenCalledWith('APP_KEY', '');
+    expect(result.items).toEqual([{ key: 'App/Key', value: '', isSecret: false }]);
   });
 });

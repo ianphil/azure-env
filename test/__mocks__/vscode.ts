@@ -6,6 +6,7 @@ export const workspace = {
     get: vi.fn(),
     update: vi.fn().mockResolvedValue(undefined),
   })),
+  isTrusted: true,
 };
 
 export const window = {
@@ -18,6 +19,9 @@ export const window = {
     appendLine: vi.fn(),
     dispose: vi.fn(),
     show: vi.fn(),
+  })),
+  createTreeView: vi.fn((_viewId: string, _options: unknown) => ({
+    dispose: vi.fn(),
   })),
   createStatusBarItem: vi.fn(() => ({
     text: '',
@@ -65,6 +69,7 @@ export class CancellationTokenSource {
 
 export const commands = {
   registerCommand: vi.fn(),
+  executeCommand: vi.fn(),
 };
 
 export enum ConfigurationTarget {
