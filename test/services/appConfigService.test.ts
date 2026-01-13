@@ -111,6 +111,60 @@ describe('AppConfigService', () => {
     });
   });
 
+  describe('listLabels', () => {
+    it('should return unique labels from settings', async () => {
+      const mockSettings = [
+        { key: 'App/Setting1', value: 'value1', label: 'dev' },
+        { key: 'App/Setting2', value: 'value2', label: 'prod' },
+        { key: 'App/Setting3', value: 'value3', label: 'dev' },
+        { key: 'App/Setting4', value: 'value4', label: null },
+      ];
+
+      mockListConfigurationSettings.mockReturnValue({
+        async *[Symbol.asyncIterator]() {
+          for (const setting of mockSettings) {
+            yield setting;
+          }
+        },
+      });
+
+      const labels = await service.listLabels();
+
+      expect(labels).toEqual(['', 'dev', 'prod']);
+    });
+
+    it('should return empty array when no settings exist', async () => {
+      mockListConfigurationSettings.mockReturnValue({
+        async *[Symbol.asyncIterator]() {
+          // yield nothing
+        },
+      });
+
+      const labels = await service.listLabels();
+
+      expect(labels).toEqual([]);
+    });
+
+    it('should return single empty string for settings with no labels', async () => {
+      const mockSettings = [
+        { key: 'App/Setting1', value: 'value1', label: null },
+        { key: 'App/Setting2', value: 'value2', label: undefined },
+      ];
+
+      mockListConfigurationSettings.mockReturnValue({
+        async *[Symbol.asyncIterator]() {
+          for (const setting of mockSettings) {
+            yield setting;
+          }
+        },
+      });
+
+      const labels = await service.listLabels();
+
+      expect(labels).toEqual(['']);
+    });
+  });
+
   describe('getSettings', () => {
     it('fetches multiple settings by keys', async () => {
       mockGetConfigurationSetting

@@ -71,6 +71,19 @@ export class AppConfigService {
   }
 
   /**
+   * List all unique labels across all settings in the store.
+   * Returns sorted array with empty string representing null/undefined labels.
+   */
+  async listLabels(): Promise<string[]> {
+    const settings = await this.listSettings({});
+    const labels = new Set<string>();
+    for (const setting of settings) {
+      labels.add(setting.label ?? '');
+    }
+    return Array.from(labels).sort();
+  }
+
+  /**
    * Get a single configuration setting by key.
    */
   async getSetting(key: string, label: string): Promise<ConfigurationSetting> {

@@ -104,8 +104,11 @@ async function connectCommand(context: vscode.ExtensionContext): Promise<void> {
       listStores: async (subscriptionId, credential) => {
         return listAppConfigStores(subscriptionId, credential as TokenCredential);
       },
-      listKeys: async (endpoint, subscription) => {
-        return listConfigKeys(endpoint, subscription);
+      listLabels: async (endpoint, subscription) => {
+        return listConfigLabels(endpoint, subscription);
+      },
+      listKeys: async (endpoint, subscription, label) => {
+        return listConfigKeys(endpoint, subscription, label);
       },
     });
 
@@ -301,11 +304,24 @@ async function listAppConfigStores(
   return stores;
 }
 
-async function listConfigKeys(endpoint: string, subscription: unknown): Promise<KeyInfo[]> {
+async function listConfigLabels(endpoint: string, subscription: unknown): Promise<string[]> {
   const sub = subscription as import('@microsoft/vscode-azext-azureauth').AzureSubscription;
   const credential = new ScopedCredential(sub);
   const appConfigService = new AppConfigService(endpoint, credential);
-  const settings = await appConfigService.listSettings({});
+  return appConfigService.listLabels();
+}
+
+async function listConfigKeys(
+  endpoint: string,
+  subscription: unknown,
+  label: string
+): Promise<KeyInfo[]> {
+  const sub = subscription as import('@microsoft/vscode-azext-azureauth').AzureSubscription;
+  const credential = new ScopedCredential(sub);
+  const appConfigService = new AppConfigService(endpoint, credential);
+  const settings = await appConfigService.listSettings({
+    labelFilter: label || undefined,
+  });
 
   return settings.filter((s) => s.key).map((s) => ({ key: s.key! }));
 }
