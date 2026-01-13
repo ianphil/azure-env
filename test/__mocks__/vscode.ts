@@ -114,6 +114,67 @@ export const mockEnvironmentVariableCollection = {
   [Symbol.iterator]: vi.fn(),
 };
 
+// Tree View mocks
+export enum TreeItemCollapsibleState {
+  None = 0,
+  Collapsed = 1,
+  Expanded = 2,
+}
+
+export class TreeItem {
+  label?: string;
+  description?: string;
+  tooltip?: string;
+  iconPath?: ThemeIcon;
+  contextValue?: string;
+  collapsibleState?: TreeItemCollapsibleState;
+
+  constructor(
+    label: string,
+    collapsibleState?: TreeItemCollapsibleState
+  ) {
+    this.label = label;
+    this.collapsibleState = collapsibleState;
+  }
+}
+
+export class ThemeIcon {
+  static readonly File = new ThemeIcon('file');
+  static readonly Folder = new ThemeIcon('folder');
+
+  constructor(public readonly id: string) {}
+}
+
+export class EventEmitter<T> {
+  private listeners: ((e: T) => void)[] = [];
+
+  event = (listener: (e: T) => void): Disposable => {
+    this.listeners.push(listener);
+    return new Disposable(() => {
+      const index = this.listeners.indexOf(listener);
+      if (index !== -1) {
+        this.listeners.splice(index, 1);
+      }
+    });
+  };
+
+  fire(data: T): void {
+    this.listeners.forEach((listener) => listener(data));
+  }
+
+  dispose(): void {
+    this.listeners = [];
+  }
+}
+
+// Clipboard mock
+export const env = {
+  clipboard: {
+    writeText: vi.fn().mockResolvedValue(undefined),
+    readText: vi.fn().mockResolvedValue(''),
+  },
+};
+
 // Mock ExtensionContext
 export const mockExtensionContext = {
   subscriptions: [] as { dispose(): void }[],

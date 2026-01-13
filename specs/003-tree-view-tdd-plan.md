@@ -6,7 +6,7 @@ Add a Tree View to display configured environment keys with hierarchy, secret ma
 
 ## TDD Cycles
 
-### Cycle 1: VS Code Mock Extensions
+### Cycle 1: VS Code Mock Extensions ✓
 **File:** `test/__mocks__/vscode.ts`
 
 Add mocks for:
@@ -16,13 +16,13 @@ Add mocks for:
 - `EventEmitter` class
 - `env.clipboard.writeText`
 
-### Cycle 2: EnvTreeItem Model
+### Cycle 2: EnvTreeItem Model ✓
 **Test:** `test/models/envTreeItem.test.ts`
 **Impl:** `src/models/envTreeItem.ts`
 
-Tests (RED):
+Tests:
 1. Creates tree item with key, value, isSecret
-2. Masks value display for secrets (`********`)
+2. Masks value display for secrets (`••••••••`)
 3. Shows actual value for non-secrets
 4. Sets `contextValue` to "secret" or "configValue"
 5. Uses `$(key)` icon for secrets, `$(symbol-constant)` for plain values
