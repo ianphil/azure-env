@@ -12,6 +12,7 @@ This document outlines what needs to be added after the core implementation to r
 | Environment injection | ✅ | ✅ |
 | Refresh command | ✅ | ✅ |
 | Key Vault reference resolution | ✅ | ✅ |
+| Label selection in connect flow | ✅ | ✅ |
 | Tree view UI | ❌ | ✅ |
 | Add configuration value | ❌ | ✅ |
 | Add secret | ❌ | ✅ |
@@ -37,8 +38,15 @@ This document outlines what needs to be added after the core implementation to r
 ```json
 {
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [{
+        "id": "azureEnv",
+        "title": "Azure Env",
+        "icon": "$(key)"
+      }]
+    },
     "views": {
-      "azure": [{
+      "azureEnv": [{
         "id": "azureEnv.environment",
         "name": "Environment",
         "when": "azureEnv.configured"
@@ -54,6 +62,8 @@ This document outlines what needs to be added after the core implementation to r
   }
 }
 ```
+
+**Note:** Uses VS Code's built-in Codicon (`$(key)`). No external icon file needed. This avoids a dependency on the Azure Tools extension pack.
 
 **Implementation notes:**
 - Use `vscode.window.createTreeView()` with the provider
@@ -282,8 +292,15 @@ async listVaults(subscriptionId: string): Promise<Array<{ name: string; vaultUri
         }
       }
     },
+    "viewsContainers": {
+      "activitybar": [{
+        "id": "azureEnv",
+        "title": "Azure Env",
+        "icon": "$(key)"
+      }]
+    },
     "views": {
-      "azure": [{
+      "azureEnv": [{
         "id": "azureEnv.environment",
         "name": "Environment",
         "when": "azureEnv.configured"
@@ -352,37 +369,16 @@ azure-env/
 
 ---
 
-## Enhancements for Connect Flow
+## ~~Enhancements for Connect Flow~~ ✅ COMPLETED
 
-### Prompt for Label During Setup
+### ~~Prompt for Label During Setup~~ ✅
 
-**Issue:** The connect flow currently saves the endpoint and selected keys, but does not prompt for or save the label. This causes refresh to fail when keys have labels (e.g., `integration-test`, `dev`, `prod`).
+**Status:** Implemented in PR #2 (merged to master)
 
-**Enhancement:** Add a step to the connect flow that:
-1. After selecting the store, detect unique labels from available keys
-2. If multiple labels exist, prompt user to select one (default to "dev" or first found)
-3. Save the selected label to workspace settings
+**Implementation:** See `specs/002-label-selection-plan.md` for details.
 
-**Implementation in `connect.ts`:**
-```typescript
-// After selecting store, before listing keys:
-const labels = await listLabels(selectedStore.endpoint, credential);
-let selectedLabel = '';
-
-if (labels.length > 1) {
-  const labelItems = labels.map(l => ({ label: l || '(no label)', value: l }));
-  const picked = await showQuickPickSingle(labelItems, {
-    placeHolder: 'Select configuration label (e.g., dev, prod)',
-  });
-  selectedLabel = picked?.value ?? '';
-} else if (labels.length === 1) {
-  selectedLabel = labels[0];
-}
-
-// Save label in settings
-await saveSettings({
-  endpoint: selectedStore.endpoint,
-  selectedKeys: selectedKeys.map((k) => k.key),
-  label: selectedLabel,
-});
-```
+- Added `listLabels()` method to AppConfigService
+- Connect flow now prompts for label when multiple labels exist
+- Auto-selects when only one label exists
+- Keys filtered by selected label
+- Label saved to workspace settings for refresh
