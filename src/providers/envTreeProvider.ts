@@ -26,12 +26,16 @@ export class EnvTreeProvider
     const item = new vscode.TreeItem(element.label, element.collapsibleState);
     item.description = element.description;
 
-    // If folder also has a value, make it copyable via context menu
+    // Folder that also has a value - use EnvTreeItem with collapsible state
     if (element.isValue && element.children.length > 0) {
-      // Add fullKey and value properties so copy commands work
-      (item as unknown as { fullKey: string; value: string }).fullKey = element.key;
-      (item as unknown as { fullKey: string; value: string }).value = element.value ?? '';
-      item.contextValue = element.isSecret ? 'folderWithSecret' : 'folderWithValue';
+      const folderItem = new EnvTreeItem(
+        element.key,
+        element.value ?? '',
+        element.isSecret ?? false,
+        element.collapsibleState
+      );
+      folderItem.label = element.label;
+      return folderItem;
     }
 
     return item;

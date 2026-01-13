@@ -376,5 +376,8 @@ async function listConfigKeys(
 }
 
 export function deactivate(): void {
-  // Cleanup handled by disposables registered with context.subscriptions
+  if (autoRefreshTimeout) {
+    clearTimeout(autoRefreshTimeout);
+    autoRefreshTimeout = undefined;
+  }
 }

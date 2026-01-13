@@ -12,8 +12,13 @@ export class EnvTreeItem extends vscode.TreeItem {
   public readonly value: string;
   public readonly isSecret: boolean;
 
-  constructor(key: string, value: string, isSecret: boolean) {
-    super(key, vscode.TreeItemCollapsibleState.None);
+  constructor(
+    key: string,
+    value: string,
+    isSecret: boolean,
+    collapsibleState: vscode.TreeItemCollapsibleState = vscode.TreeItemCollapsibleState.None
+  ) {
+    super(key, collapsibleState);
 
     this.fullKey = key;
     this.value = value;

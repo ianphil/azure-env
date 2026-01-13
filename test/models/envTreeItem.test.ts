@@ -17,6 +17,17 @@ describe('EnvTreeItem', () => {
 
       expect(item.collapsibleState).toBe(TreeItemCollapsibleState.None);
     });
+
+    it('accepts custom collapsibleState for folder items', () => {
+      const item = new EnvTreeItem(
+        'App/Config',
+        'value',
+        false,
+        TreeItemCollapsibleState.Collapsed
+      );
+
+      expect(item.collapsibleState).toBe(TreeItemCollapsibleState.Collapsed);
+    });
   });
 
   describe('value display', () => {

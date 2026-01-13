@@ -103,4 +103,28 @@ describe('EnvTreeProvider', () => {
 
     expect(passwordItem.description).toBe('••••••••');
   });
+
+  it('returns EnvTreeItem for folder-with-value nodes', () => {
+    const provider = new EnvTreeProvider();
+    // 'App/Database' has a value AND is a parent of 'App/Database/Host'
+    const entriesWithFolderValue = [
+      { key: 'App/Database', value: 'connection-string', isSecret: true },
+      { key: 'App/Database/Host', value: 'localhost', isSecret: false },
+    ];
+    provider.setData(entriesWithFolderValue);
+
+    const appNode = provider.getChildren()[0];
+    const dbNode = provider.getChildren(appNode).find((child) => child.label === 'Database');
+    if (!dbNode) {
+      throw new Error('Expected Database node');
+    }
+
+    const dbItem = provider.getTreeItem(dbNode);
+
+    // Should be EnvTreeItem (not plain TreeItem) since it has both value and children
+    expect(dbItem).toBeInstanceOf(EnvTreeItem);
+    expect((dbItem as EnvTreeItem).value).toBe('connection-string');
+    expect((dbItem as EnvTreeItem).isSecret).toBe(true);
+    expect(dbItem.collapsibleState).toBe(TreeItemCollapsibleState.Collapsed);
+  });
 });
