@@ -9,6 +9,7 @@ import { KeyVaultService } from './services/keyVaultService';
 import { ScopedCredential } from './services/scopedCredential';
 import { getSettings, saveSettings } from './models/settings';
 import { runConnectFlow, StoreInfo, KeyInfo } from './commands/connect';
+import { runAddConfigFlow } from './commands/addConfig';
 import { refreshEnvironment } from './commands/refresh';
 import { copyValueCommand } from './commands/copyValue';
 import { copyKeyCommand } from './commands/copyKey';
@@ -77,6 +78,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
       return refreshCommand(context);
     }),
+    vscode.commands.registerCommand('azureEnv.addConfig', () => addConfigCommand(context)),
     vscode.commands.registerCommand('azureEnv.copyValue', (item?: EnvTreeItem) =>
       copyValueCommand(item, {
         writeText: (value) => vscode.env.clipboard.writeText(value),
@@ -209,6 +211,91 @@ function handleConnectFailure(reason: string): void {
   }
 }
 
+async function addConfigCommand(context: vscode.ExtensionContext): Promise<void> {
+  // Security: Require workspace trust
+  if (!vscode.workspace.isTrusted) {
+    vscode.window.showErrorMessage(
+      'Azure Env requires workspace trust to connect to Azure resources'
+    );
+    return;
+  }
+
+  try {
+    const settings = getSettings();
+
+    if (!settings.endpoint || settings.selectedKeys.length === 0) {
+      vscode.window.showWarningMessage(
+        'No App Configuration configured. Run "Azure Env: Connect" first.'
+      );
+      return;
+    }
+
+    // Ensure signed in (authService initialized in activate)
+    const isSignedIn = await authService!.ensureSignedIn();
+    if (!isSignedIn) {
+      vscode.window.showErrorMessage('Azure sign-in required');
+      return;
+    }
+
+    // Get credential from subscription
+    const subscriptions = await authService!.getSubscriptions();
+    if (subscriptions.length === 0) {
+      vscode.window.showErrorMessage('No Azure subscriptions available');
+      return;
+    }
+
+    let subscription = subscriptions.find(
+      (s) => s.subscriptionId === settings.subscriptionId && s.tenantId === settings.tenantId
+    );
+
+    if (!subscription) {
+      subscription = subscriptions.find((s) => s.subscriptionId === settings.subscriptionId);
+    }
+
+    if (!subscription) {
+      outputChannel.appendLine(
+        `[ERROR] Could not find subscription ${settings.subscriptionId} (tenant: ${settings.tenantId}). Available: ${subscriptions.map((s) => `${s.name} (${s.subscriptionId})`).join(', ')}`
+      );
+      vscode.window.showErrorMessage(
+        'The Azure subscription used during setup is no longer available. Please run "Azure Env: Connect" again.'
+      );
+      return;
+    }
+
+    const credential = new ScopedCredential(subscription);
+    const appConfigService = new AppConfigService(settings.endpoint, credential);
+    const prefixes = getExistingPrefixes(settings.selectedKeys);
+
+    const result = await runAddConfigFlow({
+      showInputBox: (options) => vscode.window.showInputBox(options),
+      showQuickPickSingle,
+      getExistingPrefixes: async () => prefixes,
+      createSetting: (key, value, label) => appConfigService.createSetting(key, value, label),
+      refresh: () => refreshCommand(context),
+      getLabel: () => settings.label,
+    });
+
+    if (result.success) {
+      vscode.window.showInformationMessage(
+        `Configuration value "${result.key}" added to App Configuration`
+      );
+    }
+  } catch (error) {
+    outputChannel.appendLine(`[ERROR] Add Configuration Value failed: ${error}`);
+    if (error instanceof Error && error.stack) {
+      outputChannel.appendLine(error.stack);
+    }
+    outputChannel.show(true);
+    vscode.window
+      .showErrorMessage(`Add Configuration Value failed: ${error}`, 'Show Output')
+      .then((action) => {
+        if (action === 'Show Output') {
+          outputChannel.show();
+        }
+      });
+  }
+}
+
 async function refreshCommand(context: vscode.ExtensionContext): Promise<void> {
   // Security: Require workspace trust
   if (!vscode.workspace.isTrusted) {
@@ -335,6 +422,25 @@ async function refreshCommand(context: vscode.ExtensionContext): Promise<void> {
   } finally {
     refreshGuard.finish();
   }
+}
+
+function getExistingPrefixes(keys: string[]): string[] {
+  const prefixes = new Set<string>();
+
+  for (const key of keys) {
+    const segments = key.split('/').filter((segment) => segment.length > 0);
+    if (segments.length < 2) {
+      continue;
+    }
+
+    let prefix = '';
+    for (let index = 0; index < segments.length - 1; index++) {
+      prefix = prefix ? `${prefix}/${segments[index]}` : segments[index];
+      prefixes.add(`${prefix}/`);
+    }
+  }
+
+  return Array.from(prefixes).sort();
 }
 
 async function listAppConfigStores(

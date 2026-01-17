@@ -1,11 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AppConfigService } from '../../src/services/appConfigService';
+import { AppConfigError } from '../../src/errors';
 
-const { mockListConfigurationSettings, mockGetConfigurationSetting, MockAppConfigurationClient } =
-  vi.hoisted(() => {
+const {
+  mockListConfigurationSettings,
+  mockGetConfigurationSetting,
+  mockSetConfigurationSetting,
+  MockAppConfigurationClient,
+} = vi.hoisted(() => {
     const mocks = {
       mockListConfigurationSettings: vi.fn(),
       mockGetConfigurationSetting: vi.fn(),
+      mockSetConfigurationSetting: vi.fn(),
     };
 
     class MockAppConfigurationClient {
@@ -14,6 +20,9 @@ const { mockListConfigurationSettings, mockGetConfigurationSetting, MockAppConfi
       }
       getConfigurationSetting(...args: unknown[]) {
         return mocks.mockGetConfigurationSetting(...args);
+      }
+      setConfigurationSetting(...args: unknown[]) {
+        return mocks.mockSetConfigurationSetting(...args);
       }
     }
 
@@ -33,6 +42,7 @@ describe('AppConfigService', () => {
     mockCredential = {};
     mockListConfigurationSettings.mockReset();
     mockGetConfigurationSetting.mockReset();
+    mockSetConfigurationSetting.mockReset();
     service = new AppConfigService('https://test.azconfig.io', mockCredential);
   });
 
@@ -190,6 +200,40 @@ describe('AppConfigService', () => {
       expect(results).toHaveLength(2);
       expect(results[0].status).toBe('fulfilled');
       expect(results[1].status).toBe('rejected');
+    });
+  });
+
+  describe('createSetting', () => {
+    it('creates setting with key, value, and label', async () => {
+      mockSetConfigurationSetting.mockResolvedValue({ key: 'App/Host', value: 'localhost' });
+
+      await service.createSetting('App/Host', 'localhost', 'dev');
+
+      expect(mockSetConfigurationSetting).toHaveBeenCalledWith({
+        key: 'App/Host',
+        value: 'localhost',
+        label: 'dev',
+      });
+    });
+
+    it('creates setting without label when label is empty', async () => {
+      mockSetConfigurationSetting.mockResolvedValue({});
+
+      await service.createSetting('App/Host', 'localhost', '');
+
+      expect(mockSetConfigurationSetting).toHaveBeenCalledWith({
+        key: 'App/Host',
+        value: 'localhost',
+        label: undefined,
+      });
+    });
+
+    it('throws AppConfigError on failure', async () => {
+      mockSetConfigurationSetting.mockRejectedValue(new Error('Forbidden'));
+
+      await expect(service.createSetting('App/Key', 'value', 'dev')).rejects.toThrow(
+        AppConfigError
+      );
     });
   });
 });

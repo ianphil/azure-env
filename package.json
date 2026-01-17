@@ -21,6 +21,10 @@
         "title": "Azure Env: Refresh Environment"
       },
       {
+        "command": "azureEnv.addConfig",
+        "title": "Azure Env: Add Configuration Value"
+      },
+      {
         "command": "azureEnv.copyValue",
         "title": "Copy Value"
       },

@@ -124,4 +124,22 @@ export class AppConfigService {
   ): Promise<PromiseSettledResult<ConfigurationSetting>[]> {
     return Promise.allSettled(keys.map((key) => this.getSetting(key, label)));
   }
+
+  /**
+   * Create or update a configuration setting.
+   */
+  async createSetting(key: string, value: string, label?: string): Promise<void> {
+    try {
+      await this.client.setConfigurationSetting({
+        key,
+        value,
+        label: label || undefined,
+      });
+    } catch (error) {
+      if (isRateLimitError(error)) {
+        throw new RateLimitError('AppConfig', extractRetryAfter(error), error as Error);
+      }
+      throw new AppConfigError(`Failed to create setting: ${key}`, key, label, error as Error);
+    }
+  }
 }
